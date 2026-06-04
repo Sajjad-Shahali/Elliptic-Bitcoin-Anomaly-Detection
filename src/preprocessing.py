@@ -5,11 +5,13 @@ from sklearn.model_selection import train_test_split
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import LABEL_MAP, RANDOM_STATE, TEST_SIZE
-from src.data_loader import load_all
+
+# Elliptic paper split: train steps 1-34, test steps 35-49
+TRAIN_STEPS = range(1, 35)
+TEST_STEPS  = range(35, 50)
 
 
 def get_labeled(df: pd.DataFrame) -> pd.DataFrame:
-    """Return only labeled rows with binary label column."""
     labeled = df[df["class"].isin(["1", "2"])].copy()
     labeled["label"] = labeled["class"].map(LABEL_MAP)
     return labeled
@@ -25,37 +27,42 @@ def scale_features(X_train, X_test):
     return scaler.fit_transform(X_train), scaler.transform(X_test), scaler
 
 
-def prepare_supervised(df: pd.DataFrame):
+def prepare_supervised_temporal(df: pd.DataFrame):
     """
-    Returns X_train, X_test, y_train, y_test, feature_cols.
-    Uses only labeled rows. Drops time_step from features.
+    Temporal split matching Elliptic paper: train steps 1-34, test steps 35-49.
+    Only labeled rows used. Scaler fit on train only.
     """
     labeled = get_labeled(df)
     feature_cols = get_feature_cols(labeled)
-    X = labeled[feature_cols].values
-    y = labeled["label"].values
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
-    )
+    train = labeled[labeled["time_step"].isin(TRAIN_STEPS)]
+    test  = labeled[labeled["time_step"].isin(TEST_STEPS)]
+
+    X_train = train[feature_cols].values
+    y_train = train["label"].values
+    X_test  = test[feature_cols].values
+    y_test  = test["label"].values
+
     X_train_sc, X_test_sc, scaler = scale_features(X_train, X_test)
     return X_train_sc, X_test_sc, y_train, y_test, feature_cols, scaler
 
 
-def prepare_unsupervised(df: pd.DataFrame):
+def prepare_unsupervised_temporal(df: pd.DataFrame):
     """
-    Returns X_all (scaled, all rows including unknown), X_labeled, y_labeled.
-    Useful for unsupervised anomaly detectors evaluated on labeled subset.
+    Unsupervised variant of temporal split.
+    Scaler fit on all train-step rows (including unknown).
+    Evaluated on labeled test-step rows only.
     """
     feature_cols = get_feature_cols(df.drop(columns=["label"], errors="ignore"))
-    X_all = df[feature_cols].values
+
+    train_all = df[df["time_step"].isin(TRAIN_STEPS)]
+    test_all  = df[df["time_step"].isin(TEST_STEPS)]
 
     scaler = StandardScaler()
-    X_all_sc = scaler.fit_transform(X_all)
+    X_train_all = scaler.fit_transform(train_all[feature_cols].values)
 
-    labeled = get_labeled(df)
-    labeled_idx = df[df["class"].isin(["1", "2"])].index
-    X_labeled_sc = X_all_sc[df.index.isin(labeled_idx)]
-    y_labeled = labeled["label"].values
+    labeled_test = get_labeled(test_all)
+    X_test_labeled = scaler.transform(labeled_test[feature_cols].values)
+    y_test = labeled_test["label"].values
 
-    return X_all_sc, X_labeled_sc, y_labeled, feature_cols, scaler
+    return X_train_all, X_test_labeled, y_test, feature_cols, scaler
