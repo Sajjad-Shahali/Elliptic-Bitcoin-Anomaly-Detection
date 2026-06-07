@@ -23,26 +23,34 @@ This project systematically benchmarks **8 anomaly detection methods** across 4 
 
 > Test set: time steps 35–49 (temporal split). Illicit rate: 6.5%.
 
-| Rank | Model | Category | F1 (illicit) | ROC-AUC | Avg Precision | Precision | Recall |
-|------|-------|----------|:------------:|:-------:|:-------------:|:---------:|:------:|
-| 1 | **Random Forest** | Supervised | **0.801** | **0.935** | **0.794** | 0.901 | 0.721 |
-| 2 | Gradient Boosting | Supervised | 0.766 | 0.914 | 0.785 | 0.815 | 0.722 |
-| 3 | GraphSAGE | GNN | 0.541 | 0.888 | 0.549 | 0.478 | 0.623 |
-| 4 | Autoencoder | Neural | 0.356 | 0.781 | 0.336 | 0.356 | 0.356 |
-| 5 | Logistic Regression | Supervised | 0.302 | 0.881 | 0.291 | 0.182 | 0.872 |
-| 6 | LOF | Unsupervised | 0.076 | 0.506 | 0.066 | 0.076 | 0.076 |
-| 7 | One-Class SVM | Unsupervised | 0.023 | 0.235 | 0.039 | 0.015 | 0.049 |
-| 8 | Isolation Forest | Unsupervised | 0.021 | 0.172 | 0.036 | 0.012 | 0.078 |
+### Best Results (after all improvement rounds)
+
+| Rank | Model | Version | F1 (illicit) | ROC-AUC | Avg Precision |
+|------|-------|---------|:------------:|:-------:|:-------------:|
+| 1 | **GradientBoosting** | Optuna tuned | **0.824** | 0.920 | — |
+| 2 | LightGBM | Round 1 | 0.817 | 0.930 | 0.804 |
+| 3 | RF + Graph Features | Round 1 | 0.807 | 0.942 | 0.800 |
+| 4 | Random Forest | Baseline | 0.801 | 0.935 | 0.794 |
+| 5 | GraphSAGEv2 | Round 2 | 0.698 | 0.913 | 0.720 |
+| 6 | GraphSAGE | Optuna tuned | 0.688 | — | — |
+| 7 | GraphSAGE | Baseline | 0.541 | 0.888 | 0.549 |
+| 8 | DenoisingAE | Round 2 | 0.361 | 0.792 | 0.366 |
+| 9 | Autoencoder | Baseline | 0.356 | 0.781 | 0.336 |
+| 10 | Logistic Regression | Baseline | 0.302 | 0.881 | 0.291 |
+| 11–13 | LOF / OCSVM / IsoForest | Baseline | <0.08 | <0.51 | <0.07 |
 
 **Primary metric: F1 on illicit class.** Accuracy is misleading at 6.5% illicit rate.
 
 ### Key Takeaways
 
-- **Graph structure matters.** GraphSAGE (F1 0.54) outperforms the Autoencoder (F1 0.36) using the same features — neighborhood aggregation captures guilt-by-association in transaction chains.
-- **Supervised >> Unsupervised** by a wide margin (F1 0.80 vs 0.08). Classical anomaly detectors fail on this dataset: illicit transactions do not form tight, separable clusters in feature space.
-- **Autoencoder score inverts.** Illicit transactions reconstruct with *lower* MSE than licit ones — they follow more templated, script-like patterns. High reconstruction error ≠ anomaly here.
-- **Three features agree across all model families:** `lf_53`, `lf_90`, `af_70` rank top-20 in Random Forest (SHAP), Gradient Boosting (SHAP), and GraphSAGE (gradient attribution).
-- **Concept drift is real.** Illicit rate drops from 11.6% (train steps 1–34) to 6.5% (test steps 35–49). Random splitting inflates all metrics and should not be used.
+- **GBM + Optuna wins at F1=0.824** — the right learning rate and depth matter more than the model family.
+- **GraphSAGEv2 biggest improvement: +15.7 F1** over baseline GraphSAGE — 3 layers, LayerNorm, and self-loops unlock 3-hop neighborhood signal that money laundering chains exploit.
+- **GAT consistently underperforms GraphSAGE** across all variants — attention mechanism overfits the sparse graph topology; mean aggregation (SAGE) is more stable here.
+- **Supervised >> Unsupervised** by a wide margin (F1 0.82 vs 0.08). Illicit transactions do not cluster in feature space — density-based detectors fail.
+- **Autoencoder score inverts.** Illicit transactions reconstruct with *lower* MSE — they follow templated, script-like patterns. High reconstruction error ≠ anomaly here.
+- **VAE/VAEv2 consistently worse than AE** — ELBO score adds noise; reconstruction MSE alone is the better anomaly signal for this dataset.
+- **Three features robust across all model families:** `lf_53`, `lf_90`, `af_70` rank top-20 in RF (SHAP), GBM (SHAP), and GraphSAGE (gradient attribution).
+- **Concept drift is real.** Illicit rate drops from 11.6% (train) to 6.5% (test). Random splitting inflates all metrics.
 
 ---
 
