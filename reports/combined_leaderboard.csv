@@ -1,0 +1,14 @@
+Model,Version,F1,ROC-AUC,Avg-Prec,Category
+LightGBM,Improved,0.8167,0.93,0.8038,Supervised
+RF + GraphFeatures,Improved,0.8066,0.9421,0.7999,Supervised
+RandomForest,Baseline,0.801,0.9348,0.7938,Supervised
+GradientBoosting,Baseline,0.7659,0.9142,0.785,Supervised
+Ensemble (RF+LGB+GAT),Improved,0.7415,0.9216,0.7888,Ensemble
+GraphSAGE,Baseline,0.5409,0.8883,0.5487,GNN
+GAT,Improved,0.3592,0.8469,0.3891,GNN
+Autoencoder,Baseline,0.3564,0.7814,0.3355,Neural
+VAE,Improved,0.3398,0.778,0.3098,Neural
+LogisticRegression,Baseline,0.3015,0.8812,0.2911,Supervised
+LOF,Baseline,0.0757,0.5057,0.0658,Unsupervised
+OneClassSVM,Baseline,0.0229,0.2352,0.0391,Unsupervised
+IsolationForest,Baseline,0.021,0.1721,0.0364,Unsupervised

@@ -1,0 +1,6 @@
+Improved Model,Replaces,Baseline F1,Improved F1,Delta F1,Baseline AUC,Improved AUC,Delta AUC,Avg-Prec,Note
+LightGBM,GradientBoosting,0.7659,0.8167,0.050799999999999956,0.9142,0.93,0.015800000000000036,0.8038,LightGBM replaces GBM
+RF + GraphFeatures,RandomForest,0.801,0.8066,0.005599999999999938,0.9348,0.9421,0.007300000000000084,0.7999,RF + graph node features
+GAT,GraphSAGE,0.5409,0.3592,-0.18170000000000003,0.8883,0.8469,-0.04139999999999999,0.3891,GAT replaces GraphSAGE
+VAE,Autoencoder,0.3564,0.3398,-0.016600000000000004,0.7814,0.778,-0.0033999999999999586,0.3098,VAE replaces Autoencoder
+Ensemble (RF+LGB+GAT),—,,0.7415,,,0.9216,,0.7888,New — no baseline equivalent
