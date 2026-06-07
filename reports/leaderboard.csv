@@ -1,0 +1,9 @@
+,Model,Category,ROC-AUC,Avg-Prec,F1,Precision,Recall
+1,RandomForest,Supervised,0.9348,0.7938,0.801,0.9008,0.7211
+2,GradientBoosting,Supervised,0.9142,0.785,0.7659,0.8154,0.7221
+3,GraphSAGE,GNN,0.8883,0.5487,0.5409,0.4777,0.6233
+4,Autoencoder,Neural,0.7814,0.3355,0.3564,0.3564,0.3564
+5,LogisticRegression,Supervised,0.8812,0.2911,0.3015,0.1823,0.8717
+6,LOF,Unsupervised,0.5057,0.0658,0.0757,0.0757,0.0757
+7,OneClassSVM,Unsupervised,0.2352,0.0391,0.0229,0.015,0.0489
+8,IsolationForest,Unsupervised,0.1721,0.0364,0.021,0.0122,0.0776
