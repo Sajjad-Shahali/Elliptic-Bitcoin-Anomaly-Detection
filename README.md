@@ -1,5 +1,18 @@
 # Elliptic Bitcoin Anomaly Detection
 
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.11-EE4C2C?logo=pytorch&logoColor=white)
+![PyG](https://img.shields.io/badge/PyG-2.8.0-3C2179?logo=pytorch&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9.0-F7931E?logo=scikitlearn&logoColor=white)
+![CUDA](https://img.shields.io/badge/CUDA-12.8-76B900?logo=nvidia&logoColor=white)
+![Optuna](https://img.shields.io/badge/Optuna-4.9.0-4F86C6?logo=optuna&logoColor=white)
+![SHAP](https://img.shields.io/badge/SHAP-0.52.0-FF6B6B)
+![NumPy](https://img.shields.io/badge/NumPy-2.4-013243?logo=numpy&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-3.0-150458?logo=pandas&logoColor=white)
+![Matplotlib](https://img.shields.io/badge/Matplotlib-3.10-11557C?logo=python&logoColor=white)
+![Kaggle](https://img.shields.io/badge/Dataset-Elliptic-20BEFF?logo=kaggle&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 Detecting illicit Bitcoin transactions using the [Elliptic dataset](https://www.kaggle.com/datasets/ellipticco/elliptic-data-set) — a real-world graph of 203,769 transactions on the Bitcoin blockchain, partially labeled as illicit (money laundering, scams) or licit.
 
 This project systematically benchmarks **8 anomaly detection methods** across 4 paradigms: unsupervised, supervised, deep learning, and graph neural networks.
