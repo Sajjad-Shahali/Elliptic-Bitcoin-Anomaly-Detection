@@ -1,0 +1,49 @@
+Rank,Model,Category,Round,F1,AUC,AP
+1,GBM + Structural (172 feat),Supervised,Rnd 4,0.8265,0.9243,0.8031
+2,GradientBoosting (Optuna),Supervised,Optuna,0.8241,0.9204,
+3,GBM + PseudoLabels,Semi-supervised,Rnd 4,0.8235,0.924,0.804
+4,Ensemble (GBM+LGBM+SAGEv2),Ensemble,Rnd 3,0.821,0.924,0.802
+5,Weighted Ensemble (equal 1/3),Ensemble,Rnd 5,0.8209,0.9238,0.8019
+6,GBM + Temporal Rolling (496 feat),Supervised,Rnd 5,0.8179,0.93,0.8017
+7,LightGBM,Supervised,Rnd 1,0.817,0.93,0.804
+8,RF + Graph Features,Supervised,Rnd 1,0.807,0.942,0.8
+9,Random Forest (baseline),Supervised,Base,0.801,0.935,0.794
+10,GBM Platt-calibrated,Supervised,Rnd 5,0.8006,0.9204,0.8
+11,Random Forest (Optuna),Supervised,Optuna,0.797,0.929,
+12,GradientBoosting (baseline),Supervised,Base,0.766,0.914,0.785
+13,Ensemble (RF+LGB+GAT),Ensemble,Rnd 1,0.742,0.922,0.789
+14,GBM Isotonic-calibrated,Supervised,Rnd 5,0.734,0.8753,0.7682
+15,SAGEv2 + PseudoLabels,Semi-supervised,Rnd 4,0.7293,0.8901,0.7517
+16,GraphSAGEv2,GNN,Rnd 2,0.698,0.913,0.72
+17,GNN Exp 7 (Optuna best),GNN,GNN-exp,0.69,0.901,0.706
+18,GraphSAGE (Optuna),GNN,Optuna,0.688,,
+19,GNN Exp 6 — 3L h=256 LN+SL,GNN,GNN-exp,0.683,0.906,0.704
+20,GNN Exp 5 — 3L h=128,GNN,GNN-exp,0.615,0.899,0.611
+21,GNN Exp 4 — 2L h=128 300ep,GNN,GNN-exp,0.597,0.897,0.607
+22,GNN Exp 3 — 2L h=256,GNN,GNN-exp,0.58,0.895,0.595
+23,GNN Exp 2 — 2L h=128,GNN,GNN-exp,0.577,0.896,0.603
+24,GraphSAGE (baseline),GNN,Base,0.541,0.888,0.549
+25,GNN Exp 1 — 2L h=64,GNN,GNN-exp,0.528,0.887,0.519
+26,beta-VAE (beta=0.01),Neural AE,Rnd 4,0.4065,0.7832,0.3651
+27,GNN Exp 10 — GATv2 3L residual,GNN,GNN-exp,0.382,0.887,0.547
+28,beta-VAE (beta=1.0),Neural AE,Rnd 4,0.3717,0.776,0.3384
+29,DenoisingAE,Neural AE,Rnd 2,0.361,0.792,0.366
+30,GAT (baseline),GNN,Rnd 1,0.359,0.847,0.389
+31,Autoencoder (baseline),Neural AE,Base,0.356,0.781,0.336
+32,beta-VAE (beta=8.0),Neural AE,Rnd 4,0.3496,0.7625,0.2993
+33,GNN Exp 9 — GAT 2L 2heads,GNN,GNN-exp,0.341,0.864,0.419
+34,VAE,Neural AE,Rnd 1,0.34,0.778,0.31
+35,GATv2,GNN,Rnd 2,0.317,0.882,0.376
+36,beta-VAE (beta=4.0),Neural AE,Rnd 4,0.3127,0.7535,0.2867
+37,GNN Exp 8 — GAT 2L 4heads,GNN,GNN-exp,0.307,0.824,0.366
+38,Logistic Regression,Supervised,Base,0.302,0.881,0.291
+39,beta-VAE (beta=2.0),Neural AE,Rnd 4,0.2798,0.7455,0.2108
+40,VAEv2,Neural AE,Rnd 2,0.256,0.732,0.161
+41,DOMINANT,Graph AE (unsup),Rnd 3,0.212,0.669,0.123
+42,LSTM-AE,Neural AE,Rnd 3,0.122,0.446,0.064
+43,IsoForest (structural only),Unsupervised,Rnd 4,0.0941,0.4576,0.0556
+44,LOF,Unsupervised,Base,0.076,0.506,0.066
+45,OCSVM (spectral K=50),Unsupervised,Rnd 4,0.0613,0.3909,0.0537
+46,IsoForest (spectral K=50),Unsupervised,Rnd 4,0.0562,0.4071,0.0521
+47,One-Class SVM,Unsupervised,Base,0.023,0.235,0.039
+48,Isolation Forest,Unsupervised,Base,0.021,0.172,0.036

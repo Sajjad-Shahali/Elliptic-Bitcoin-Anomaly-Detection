@@ -518,7 +518,7 @@ Exp & Arch & Configuration & F1 & AUC & AP \\
 4 & SAGE   & 2L, h=128, 300 ep                     & 0.597 & 0.897 & 0.607 \\
 5 & SAGE   & 3L, h=128, 200 ep                     & 0.615 & 0.899 & 0.611 \\
 6 & SAGEv2 & 3L, h=256, LN+SL, 250 ep             & 0.683 & 0.906 & 0.704 \\
-\textbf{7} & \textbf{SAGE} & \textbf{3L h=256, lr=0.0038, 274 ep (Optuna)} & \textbf{0.690} & 0.901 & \textbf{0.706} \\
+\textbf{7} & \textbf{SAGE} & \textbf{3L, h=256, lr=0.0038, 274\,ep (Opt.)} & \textbf{0.690} & 0.901 & \textbf{0.706} \\
 8 & GAT    & 2L, 4 heads, lr=5e-4, 200 ep          & 0.307 & 0.824 & 0.366 \\
 9 & GAT    & 2L, 2 heads, lr=1e-3, 200 ep          & 0.341 & 0.864 & 0.419 \\
 10 & GATv2 & 3L, 2 heads, residual+LN, 300 ep      & 0.382 & 0.887 & 0.547 \\
@@ -551,8 +551,8 @@ Attention is counterproductive on sparse graphs.
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=\columnwidth]{gnn_prog_left.png}\\[4pt]
-  \includegraphics[width=\columnwidth]{gnn_prog_right.png}
+  \includegraphics[width=\columnwidth]{gnn_stacked_top.png}\\[4pt]
+  \includegraphics[width=\columnwidth]{gnn_stacked_bot.png}
   \caption{GNN ablation across 10 experiments.  Top: F1 progression showing
            the GraphSAGE improvement trajectory (Exps~1--7) and the GAT
            family ceiling (Exps~8--10).  Bottom: corresponding AUC/AP values
