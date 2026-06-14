@@ -41,6 +41,8 @@ Detecting illicit Bitcoin transactions using the [Elliptic dataset](https://www.
 
 **Primary metric: F1 on illicit class.** Accuracy is meaningless at 6.5% illicit rate.
 
+![Top-15 Leaderboard](reports/final_top15_f1.png)
+
 ### Improvement Journey — 5 Rounds
 
 | Model | Baseline | Round 1 | Round 2 | Optuna | Round 3–5 | Best |
@@ -50,6 +52,14 @@ Detecting illicit Bitcoin transactions using the [Elliptic dataset](https://www.
 | GraphSAGE | 0.541 | — | 0.698 (+3L) | 0.688 | 0.729 (+pseudo) | 0.729 |
 | Autoencoder | 0.356 | 0.340 (VAE) | 0.361 (DAE) | — | 0.407 (β-VAE) | 0.407 |
 | GAT | — | 0.359 | 0.317 (v2) | — | — | 0.359 |
+
+### Round Progression
+
+![Round Progression](reports/final_round_progression.png)
+
+### Best per Tier — F1 vs ROC-AUC
+
+![Tier Comparison](reports/final_tier_comparison.png)
 
 ### Key Takeaways
 
@@ -86,6 +96,12 @@ The [Elliptic Data Set](https://www.kaggle.com/datasets/ellipticco/elliptic-data
 **Features:** Col 0 = txId · Col 1 = time_step (1–49) · Cols 2–94 = 93 local features · Cols 95–165 = 71 aggregated neighborhood features. Names not published by Elliptic.
 
 **Temporal structure:** 49 time steps over ~2 years. Steps 1–43 labeled; 44–49 unlabeled.
+
+### Concept Drift
+
+Illicit rate drops 13.4% → 6.5% train→test. Random split inflates all metrics by ~5–10 F1 points.
+
+![Concept Drift](reports/concept_drift.png)
 
 ---
 
@@ -166,6 +182,18 @@ Random shuffling is explicitly avoided — this is a time-series dataset. Shuffl
 
 ---
 
+### Precision-Recall Curves
+
+![PR Curves](reports/pr_curves.png)
+
+### Confusion Matrices
+
+| Ensemble (GBM+LGBM+SAGEv2) | DOMINANT (Graph AE) |
+|:---------------------------:|:-------------------:|
+| ![CM Ensemble](reports/cm_Ensemble.png) | ![CM DOMINANT](reports/cm_DOMINANT.png) |
+
+---
+
 ## GNN Ablation Study
 
 `scripts/gnn_experiments.py` runs 10 controlled experiments isolating the effect of each architectural choice.
@@ -200,11 +228,21 @@ Random shuffling is explicitly avoided — this is a time-series dataset. Shuffl
 
 SHAP TreeExplainer for RF + GBM, gradient attribution for GraphSAGE.
 
+### beta-VAE: Effect of KL Weight on Performance
+
+![beta-VAE F1 curve](reports/beta_f1_curve.png)
+
 ### SHAP — Random Forest
 ![SHAP bar](reports/shap_rf_bar.png)
 
-### SHAP Beeswarm
+### SHAP Beeswarm — Random Forest
 ![SHAP beeswarm](reports/shap_rf_beeswarm.png)
+
+### SHAP — Gradient Boosting
+![SHAP GBM bar](reports/shap_gbm_bar.png)
+
+### SHAP Beeswarm — Gradient Boosting
+![SHAP GBM beeswarm](reports/shap_gbm_beeswarm.png)
 
 ### GraphSAGE Gradient Attribution
 ![GNN attribution](reports/gnn_gradient_attribution.png)
@@ -240,31 +278,35 @@ These three features rank top-20 regardless of model family — strongest consis
 │   ├── gat.py                   # GAT + GATv2 (3-layer, residual, heads=2)
 │   ├── graph_features.py        # degree, PageRank, clustering from edgelist
 │   ├── graph_utils.py           # build PyG Data object
+│   ├── inference.py             # load_pipeline() + score_transactions() — production scoring
 │   └── evaluation.py            # metrics, confusion matrix, PR/ROC plots
 │
 ├── scripts/
-│   ├── 01_eda.py                # class distribution, temporal viz, feature dists
-│   ├── 02_unsupervised.py       # IsolationForest, LOF, OCSVM
-│   ├── 03_supervised.py         # RF, GBM, LogReg + feature importance
-│   ├── 04_autoencoder.py        # baseline autoencoder
-│   ├── 05_gnn.py                # baseline GraphSAGE
-│   ├── 06_explainability.py     # SHAP + gradient attribution
-│   ├── 07_final_comparison.py   # all baseline models leaderboard
-│   ├── 08_tune_and_save.py      # Optuna tuning RF/GBM/GraphSAGE (40 trials each)
-│   ├── 09_tuned_comparison.py   # baseline vs tuned comparison
-│   ├── 10_improved_models.py    # LightGBM, RF+graph, GAT, VAE, Ensemble (Round 1)
-│   ├── 11_improved_comparison.py# Round 1 improvement deltas + plots
-│   ├── 12_deep_improved.py      # GATv2, GraphSAGEv2, DenoisingAE, VAEv2 (Round 2)
-│   ├── 13_dominant.py           # DOMINANT GCN-AE (Round 3)
-│   ├── 14_lstm_ae.py            # LSTM-AE temporal anomaly detection (Round 3)
-│   ├── 15_ensemble.py           # GBM+LGBM+SAGEv2 soft-vote ensemble (Round 3)
-│   ├── 16_pseudo_labels.py      # semi-supervised GBM+SAGEv2 with pseudo-labels (Round 4)
-│   ├── 17_beta_vae.py           # beta-VAE grid search beta in {0.01,1,2,4,8} (Round 4)
-│   ├── 18_structural_graph_features.py  # topology features + GBM (Round 4)
-│   ├── 19_spectral_anomaly.py   # spectral embedding IsoForest/OCSVM (Round 4)
-│   ├── 20_weighted_ensemble.py  # weighted ensemble weight sweep (Round 5)
-│   ├── 21_calibrated_gbm.py     # Platt + isotonic calibration (Round 5)
-│   └── 22_temporal_rolling_features.py  # rolling mean/std features (Round 5)
+│   ├── eda.py                           # class distribution, temporal viz, feature dists
+│   ├── baseline_unsupervised.py         # IsolationForest, LOF, OCSVM
+│   ├── baseline_supervised.py           # RF, GBM, LogReg + feature importance
+│   ├── baseline_autoencoder.py          # baseline autoencoder
+│   ├── baseline_gnn.py                  # baseline GraphSAGE
+│   ├── shap_explainability.py           # SHAP + gradient attribution
+│   ├── baseline_comparison.py           # all baseline models leaderboard
+│   ├── optuna_tuning.py                 # Optuna tuning RF/GBM/GraphSAGE (40 trials each)
+│   ├── tuned_comparison.py              # baseline vs tuned comparison
+│   ├── improved_models.py               # LightGBM, RF+graph, GAT, VAE, Ensemble (Round 1)
+│   ├── improved_comparison.py           # Round 1 improvement deltas + plots
+│   ├── deep_architecture_improvements.py# GATv2, GraphSAGEv2, DenoisingAE, VAEv2 (Round 2)
+│   ├── gnn_ablation.py                  # 10-experiment GNN ablation study
+│   ├── dominant_graph_ae.py             # DOMINANT GCN-AE (Round 3)
+│   ├── lstm_autoencoder.py              # LSTM-AE temporal anomaly detection (Round 3)
+│   ├── ensemble_soft_vote.py            # GBM+LGBM+SAGEv2 soft-vote ensemble (Round 3)
+│   ├── pseudo_label_training.py         # semi-supervised GBM+SAGEv2 (Round 4)
+│   ├── beta_vae_gridsearch.py           # beta-VAE grid search (Round 4)
+│   ├── structural_graph_features.py     # topology features + GBM (Round 4)
+│   ├── spectral_anomaly_detection.py    # spectral embedding IsoForest/OCSVM (Round 4)
+│   ├── weighted_ensemble.py             # weighted ensemble sweep (Round 5)
+│   ├── probability_calibration.py       # Platt + isotonic calibration (Round 5)
+│   ├── temporal_rolling_features.py     # rolling mean/std features (Round 5)
+│   ├── lgbm_xgboost_structural.py       # LightGBM/XGBoost on structural features
+│   └── final_leaderboard.py             # full leaderboard table + 3 comparison plots
 │
 ├── models/                      # saved weights
 │   ├── scaler.joblib · scaler_graph_features.joblib · scaler_structural.joblib
@@ -277,6 +319,10 @@ These three features rank top-20 regardless of model family — strongest consis
 │   └── gat.pt · gatv2.pt
 │
 ├── reports/                     # auto-generated plots + CSVs
+│   ├── final_leaderboard.csv              ← all 48 experiments ranked
+│   ├── final_top15_f1.png                 ← top-15 horizontal bar chart
+│   ├── final_tier_comparison.png          ← best per tier F1 vs AUC
+│   ├── final_round_progression.png        ← improvement across 5 rounds
 │   ├── leaderboard.csv · combined_leaderboard.csv
 │   ├── cm_DOMINANT.png · cm_Ensemble.png · pr_curves.png
 │   ├── shap_rf_bar.png · shap_rf_beeswarm.png · shap_gbm_bar.png
@@ -323,37 +369,64 @@ Requires a [Kaggle account](https://www.kaggle.com/) and `~/.kaggle/kaggle.json`
 ### Run Pipeline
 
 ```bash
-# Baseline experiments (scripts 01-09)
-python scripts/01_eda.py
-python scripts/02_unsupervised.py
-python scripts/03_supervised.py
-python scripts/04_autoencoder.py
-python scripts/05_gnn.py
-python scripts/06_explainability.py
-python scripts/07_final_comparison.py
-python scripts/08_tune_and_save.py      # ~20 min GPU
-python scripts/09_tuned_comparison.py
+# Baseline experiments
+python scripts/eda.py
+python scripts/baseline_unsupervised.py
+python scripts/baseline_supervised.py
+python scripts/baseline_autoencoder.py
+python scripts/baseline_gnn.py
+python scripts/shap_explainability.py
+python scripts/baseline_comparison.py
+python scripts/optuna_tuning.py            # ~20 min GPU
+python scripts/tuned_comparison.py
 
 # Round 1-2: new model families + architecture upgrades
-python scripts/10_improved_models.py    # ~10 min GPU
-python scripts/11_improved_comparison.py
-python scripts/12_deep_improved.py      # ~15 min GPU
+python scripts/improved_models.py          # ~10 min GPU
+python scripts/improved_comparison.py
+python scripts/deep_architecture_improvements.py  # ~15 min GPU
+python scripts/gnn_ablation.py             # ~20 min GPU
 
-# Round 3: course-derived methods (DOMINANT, LSTM-AE, Ensemble)
-python scripts/13_dominant.py           # ~5 min GPU
-python scripts/14_lstm_ae.py            # ~3 min
-python scripts/15_ensemble.py           # ~3 min GPU
+# Round 3: DOMINANT, LSTM-AE, Ensemble
+python scripts/dominant_graph_ae.py        # ~5 min GPU
+python scripts/lstm_autoencoder.py         # ~3 min
+python scripts/ensemble_soft_vote.py       # ~3 min GPU
 
-# Round 4: Tier 2 improvements
-python scripts/16_pseudo_labels.py      # ~10 min GPU
-python scripts/17_beta_vae.py           # ~5 min
-python scripts/18_structural_graph_features.py  # ~5 min (NetworkX graph build)
-python scripts/19_spectral_anomaly.py   # ~5 min (ARPACK eigenvectors)
+# Round 4: semi-supervised, β-VAE, structural, spectral
+python scripts/pseudo_label_training.py    # ~10 min GPU
+python scripts/beta_vae_gridsearch.py      # ~5 min
+python scripts/structural_graph_features.py     # ~5 min (NetworkX build)
+python scripts/spectral_anomaly_detection.py    # ~5 min (ARPACK eigenvectors)
 
 # Round 5: ensemble tuning, calibration, temporal features
-python scripts/20_weighted_ensemble.py  # ~3 min GPU
-python scripts/21_calibrated_gbm.py     # ~1 min
-python scripts/22_temporal_rolling_features.py  # ~3 min
+python scripts/weighted_ensemble.py        # ~3 min GPU
+python scripts/probability_calibration.py  # ~1 min
+python scripts/temporal_rolling_features.py  # ~3 min
+python scripts/lgbm_xgboost_structural.py  # ~10 min
+
+# Final leaderboard (all 48 experiments, 3 plots)
+python scripts/final_leaderboard.py
+```
+
+### Score New Transactions (Inference)
+
+```python
+from src.inference import load_pipeline, score_transactions
+
+# Load best model (GBM + Structural, F1=0.8265)
+pipeline = load_pipeline()   # loads from models/
+
+# Score any set of transactions
+results = score_transactions(pipeline, df, edges)
+# Returns DataFrame: [txId, prob_illicit, label, risk]
+# risk: "HIGH" (p>=0.70) / "MEDIUM" (p>=0.30) / "LOW"
+
+# Or score directly from CSV files
+from src.inference import score_from_csv
+results = score_from_csv(
+    features_csv="data/elliptic_txs_features.csv",
+    edgelist_csv="data/elliptic_txs_edgelist.csv",
+    output_csv="scored_transactions.csv",
+)
 ```
 
 ---
