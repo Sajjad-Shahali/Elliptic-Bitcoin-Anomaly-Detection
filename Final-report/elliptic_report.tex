@@ -773,9 +773,11 @@ RF $\cap$ GBM $\cap$ GNN (3) &
 \end{tabular}
 \end{table}
 
-SHAP TreeExplainer was applied to RF and GBM; gradient attribution was
-computed for GraphSAGE by backpropagating the illicit-class logit to the
-input and averaging over illicit test nodes.
+SHAP TreeExplainer was applied to GBM (Optuna, the best tabular model,
+F1~=~0.824) and RF; gradient attribution was computed for GraphSAGE by
+backpropagating the illicit-class logit to the input and averaging over
+illicit test nodes.  Fig.~\ref{fig:shap_beeswarm} shows the GBM beeswarm
+as the primary explainability view.
 
 Three features---\texttt{lf\_53}, \texttt{lf\_90} (local), and
 \texttt{af\_70} (aggregated neighborhood)---rank top-20 in every model
@@ -790,13 +792,14 @@ semantics via Elliptic collaboration is the primary open question.
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=\columnwidth]{shap_rf_beeswarm.png}
-  \caption{SHAP beeswarm for Random Forest.  Each dot is one test
-           transaction; colour encodes feature value (red=high, blue=low).
-           Direction of effect reveals whether high values predict illicit
-           (positive SHAP) or licit (negative SHAP).  Features
-           \texttt{lf\_53}, \texttt{lf\_90}, \texttt{af\_70} appear
-           in the top band across both models.}
+  \includegraphics[width=\columnwidth]{shap_gbm_beeswarm.png}
+  \caption{SHAP beeswarm for GBM (Optuna, F1~=~0.824)---the best
+           tabular model.  Each dot is one test-set transaction (sample
+           of 3\,000); colour encodes feature value (red=high, blue=low).
+           Positive SHAP pushes toward illicit; negative toward licit.
+           Features \texttt{lf\_53}, \texttt{lf\_90}, and \texttt{af\_70}
+           rank in the top band and appear consistently across RF, GBM,
+           and GraphSAGE gradient attribution.}
   \label{fig:shap_beeswarm}
 \end{figure}
 
