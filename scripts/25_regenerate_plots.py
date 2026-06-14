@@ -82,8 +82,10 @@ else:
     # top of this image (right half of the original wide figure).
     # Crop it by removing the top 55 pixels.
     CROP_TOP = 55
-    cropped = img.crop((0, CROP_TOP, w, h))
-    cropped.save(ae_right_path)
-    print(f"  Cropped top {CROP_TOP}px from ae_errors_right.png  ({w}x{h} -> {w}x{h-CROP_TOP})")
+    if h > 460:  # guard: only crop once (original height ~480)
+        img.crop((0, CROP_TOP, w, h)).save(ae_right_path)
+        print(f"  Cropped top {CROP_TOP}px from ae_errors_right.png  ({w}x{h} -> {w}x{h-CROP_TOP})")
+    else:
+        print(f"  SKIP ae_errors_right.png crop (already cropped, h={h})")
 
 print("Done.")

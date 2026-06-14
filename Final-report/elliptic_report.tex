@@ -51,9 +51,10 @@ improvement rounds.  All models share a strict temporal train/test split
 respecting the time-series nature of the data.  The best result,
 \textbf{F1~=~0.8265}, is achieved by Gradient Boosting augmented with seven
 structural topology features.  GraphSAGEv2 reaches \textbf{F1~=~0.698} using
-only graph topology, recovering 84.5\,\% of the supervised ceiling.  Classical
-unsupervised detectors never exceed F1~=~0.076; the course-derived DOMINANT
-graph autoencoder reaches F1~=~0.212.  A controlled GNN ablation shows that
+graph message passing over node features and topology, recovering 84.5\,\% of
+the supervised ceiling.  Classical feature-space unsupervised baselines never
+exceed F1~=~0.076; the course-derived DOMINANT graph autoencoder reaches
+F1~=~0.212.  A controlled GNN ablation shows that
 LayerNorm and self-loops ($+0.068$ F1) matter more than depth or attention.
 $\beta$-VAE with $\beta{=}0.01$ achieves F1~=~0.407, the best purely
 unsupervised result.  SHAP and gradient attribution identify three
@@ -81,7 +82,8 @@ graph of real Bitcoin transactions: 203\,769 transactions, 234\,355 directed
 edges, 4\,545 labeled illicit (2\,\%), 42\,019 labeled licit (21\,\%), and
 157\,205 unlabeled (77\,\%) over 49 time steps spanning roughly two years.
 Each node carries 165 anonymous features---93 local statistics and 71 aggregated
-neighborhood summaries.
+neighborhood summaries (some sources count 166 including the time-step
+index, which we treat as a split attribute rather than a predictive feature).
 
 \noindent\textbf{Three intertwined challenges:}
 \begin{enumerate}
@@ -227,29 +229,46 @@ The 44\,\% relative drop in illicit rate confirms genuine concept drift.
 \textbf{Primary metric}: F1 on the illicit class.  Secondary: PR-AUC
 (threshold-independent, informative under imbalance) and ROC-AUC.
 
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{concept_drift.png}
+  \caption{Illicit transaction rate per time step (labeled nodes only).
+           The rate falls from roughly 11.6\,\% in the training window
+           (steps 1--34) to 6.5\,\% in the test window (steps 35--49),
+           a 44\,\% relative decline confirming genuine concept drift.
+           Random shuffling would mask this shift and inflate all metrics.}
+  \label{fig:concept_drift}
+\end{figure}
+
 \subsection{Per-Paradigm Training Setup}
 
 Each paradigm uses different training data and threshold strategy, as
 summarised in Table~\ref{tab:eval_protocol}.
+\textit{Note on supervision}: models in the IsoForest/LOF and
+OCSVM/AE/VAE rows use no labels for \emph{training}, but their
+classification thresholds are selected by optimising F1 on a labeled
+subset.  They are therefore better described as \emph{semi-supervised at
+threshold-selection stage} rather than fully unsupervised; truly label-free
+thresholds (EVT) are evaluated separately.
 
 \begin{table}[htbp]
 \centering
-\small
 \caption{Per-Paradigm Training and Threshold Strategy}
 \label{tab:eval_protocol}
-\renewcommand{\arraystretch}{1.1}
-\begin{tabular}{@{}p{1.7cm}p{3.0cm}p{2.2cm}@{}}
+\renewcommand{\arraystretch}{1.2}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lll@{}}
 \toprule
 Paradigm & Training data & Threshold \\
 \midrule
-IsoForest/LOF   & 136\,265 all train rows & F1-opt, labeled train \\
-OCSVM/AE/VAE   & 26\,432 licit-only rows & F1-opt, val steps 30--34 \\
-Supervised      & 29\,894 labeled train   & 0.5 (default) \\
-GNN             & Full graph, train masks & 0.5 (default) \\
-Ensemble        & Labeled train rows      & Grid search, val steps \\
-Semi-sup.       & Train + pseudo-labeled  & 0.5 (default) \\
+IsoForest / LOF  & 136\,265 all train rows  & F1-opt, labeled train \\
+OCSVM / AE / VAE & 26\,432 licit-only rows  & F1-opt, val steps 30--34 \\
+Supervised       & 29\,894 labeled train    & 0.5 (default) \\
+GNN              & Full graph, train masks  & 0.5 (default) \\
+Ensemble         & Labeled train rows       & Grid search, val steps \\
+Semi-sup.        & Train + pseudo-labeled   & 0.5 (default) \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 \subsection{Model Families}
@@ -284,8 +303,10 @@ reconstruction)~\cite{ding2019dominant}.
 Full PyG graph; edges made undirected; inverse-frequency
 \texttt{CrossEntropyLoss}.  GraphSAGE mean aggregation at layer $k$:
 \begin{equation}
-h_v^{(k)} = \sigma\!\left(W^{(k)}\cdot\text{MEAN}\!\left(
-\{h_v^{(k-1)}\}\cup\{h_u^{(k-1)}: u\in\mathcal{N}(v)\}\right)\right).
+\begin{split}
+h_v^{(k)} = \sigma\Bigl(W^{(k)}&\cdot\operatorname{MEAN}\bigl(\{h_v^{(k-1)}\}\\
+&\cup\{h_u^{(k-1)}: u\!\in\!\mathcal{N}(v)\}\bigr)\Bigr).
+\end{split}
 \label{eq:sage}
 \end{equation}
 Variants: baseline (2L, $h{=}128$, 200ep), GraphSAGEv2 (3L, $h{=}256$,
@@ -464,6 +485,18 @@ compresses licit and illicit representations together, weakening the anomaly
 signal.  The F1 plateau at $\approx$0.36--0.41 reflects the hard ceiling
 of unsupervised reconstruction-based detection on this dataset.
 
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{beta_f1_curve.png}
+  \caption{Effect of KL weight $\beta$ on $\beta$-VAE anomaly detection
+           performance (F1 on illicit class and ROC-AUC, log-$\beta$ axis).
+           Smaller $\beta$ keeps the objective reconstruction-dominated,
+           preserving the score-inversion signal.  F1 peaks at $\beta{=}0.01$
+           and degrades monotonically above $\beta{=}1$ as the KL term
+           conflates licit and illicit latent representations.}
+  \label{fig:beta_f1}
+\end{figure}
+
 \subsubsection{EVT Thresholding}
 EVT thresholding (Eq.~\ref{eq:evt}) collapses on DOMINANT and LSTM-AE
 because score distributions are concentrated near zero with thin tails---the
@@ -547,7 +580,11 @@ Exp & Arch & Configuration & F1 & AUC & AP \\
 \end{itemize}
 
 \textbf{Answer to RQ3}: LayerNorm+self-loops~$>$ depth~$>$ width~$>$ tuning.
-Attention is counterproductive on sparse graphs.
+In this configuration and feature setting, vanilla GAT and GATv2 are
+counterproductive on a sparse graph (avg.\ degree~2.3); recent work with
+Chebyshev convolutions and deeper GATv2 + skip connections has narrowed
+the gap on Elliptic under different feature subsets, so the finding should
+not be generalised beyond mean-aggregation architectures at this scale.
 
 \begin{figure}[htbp]
   \centering
@@ -558,6 +595,18 @@ Attention is counterproductive on sparse graphs.
            family ceiling (Exps~8--10).  Bottom: corresponding AUC/AP values
            confirming the same ranking.}
   \label{fig:gnn_progression}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{gnn_experiments_radar.png}
+  \caption{Radar chart of the top-5 GNN experiments across five metrics:
+           F1, ROC-AUC, Average Precision, Precision, and Recall.
+           GraphSAGEv2 (Exp~6) and the Optuna-tuned variant (Exp~7)
+           dominate across all axes, while GAT family experiments show
+           systematically lower coverage---confirming mean aggregation
+           outperforms attention on this sparse graph.}
+  \label{fig:gnn_radar}
 \end{figure}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -617,8 +666,10 @@ distorts ordering (AUC drops 0.920$\to$0.875).
 \subsection{Full 48-Experiment Leaderboard}
 
 Table~\ref{tab:leaderboard} reports the top~25 of 48 experiments.
-Fig.~\ref{fig:top15} shows the top-15 by F1; Fig.~\ref{fig:pr_curves}
-shows Precision--Recall curves for representative models.
+Fig.~\ref{fig:top15} shows the top-15 by F1.
+Fig.~\ref{fig:pr_curves} shows Precision--Recall curves for key
+supervised models, confirming that high AP ($\approx$0.80) is
+achievable across the recall range.
 
 \begin{table}[htbp]
 \centering
@@ -673,11 +724,13 @@ shows Precision--Recall curves for representative models.
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\columnwidth]{pr_curves.png}
-  \caption{Precision--Recall curves for representative models.  Supervised
-           trees maintain high precision across the recall range; GNNs form
-           a middle band; neural and unsupervised detectors collapse quickly.
-           PR-AUC is threshold-independent and more informative than ROC-AUC
-           under severe class imbalance.}
+  \caption{Precision--Recall curves for key supervised models on the test
+           set (steps 35--49, 6.5\,\% illicit).  LightGBM and GBM (Optuna)
+           achieve AP~$\approx$~0.80, maintaining high precision across the
+           recall range.  Logistic Regression collapses to low precision at
+           moderate recall (AP~=~0.291).  The dotted line marks the chance
+           baseline (AP~=~0.065).  PR-AUC is threshold-independent and more
+           informative than ROC-AUC under severe class imbalance.}
   \label{fig:pr_curves}
 \end{figure}
 
@@ -689,8 +742,8 @@ shows Precision--Recall curves for representative models.
         84.5\,\% of the supervised ceiling using only topology.
   \item \textbf{Neural AE} (F1 0.12--0.41): bounded by reconstruction
         ceiling; best from $\beta$-VAE ($\beta{=}0.01$).
-  \item \textbf{Graph AE unsupervised} (DOMINANT, F1~=~0.212): best fully
-        unsupervised method.
+  \item \textbf{Graph AE unsupervised} (DOMINANT, F1~=~0.212): best
+        unsupervised \emph{graph} method ($\beta$-VAE is higher overall).
   \item \textbf{Classical unsupervised} (F1~$<$~0.10): density methods fail.
 \end{enumerate}
 
@@ -801,16 +854,25 @@ GraphSAGEv2 gains $+0.031$: extra pseudo-labeled nodes populate graph
 neighborhoods during message passing.
 
 \textbf{Concept drift.}
-Illicit rate drops 11.6\,\%$\to$6.5\,\% over 15 steps.  Production systems
-need temporal threshold recalibration.
+Illicit rate drops 11.6\,\%$\to$6.5\,\% over 15 steps.  Production
+systems need temporal threshold recalibration; practical strategies include
+sliding-window F1 re-optimisation on the most recent labeled window,
+Bayesian prior-shift correction, and adaptive class-weight schedules tied
+to rolling illicit-rate estimates.
 
 \textbf{Limitations.}
 (1)~Feature semantics unknown---robust features cannot be interpreted without
 Elliptic collaboration.
-(2)~GAT Optuna tuning incomplete; the SAGE/GAT gap may narrow.
+(2)~GAT Optuna tuning incomplete; recent Elliptic work with Chebyshev
+convolutions and skip-connected GATv2 reports higher GNN F1 under
+different feature subsets---our GNN results represent a strong but not
+exhaustive upper bound.
 (3)~GBM + GraphSAGEv2 stacking unexplored.
 (4)~DOMINANT with more epochs and $\alpha$ tuning may gain further.
 (5)~Per-transaction LSTM-AE (vs.\ timestep aggregate) not evaluated.
+(6)~This work positions itself as a comprehensive baseline benchmark
+across paradigms; direct comparison to reported Elliptic SOTA
+(e.g., Chebyshev-GCN, N2V-GCN) is left for future work.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Conclusion}
@@ -831,9 +893,9 @@ improvement rounds.  Six actionable findings:
   \item \textbf{Reconstruction detection is viable but inverted.}
         $\beta$-VAE ($\beta{=}0.01$, F1~=~0.407) is the best unsupervised
         non-graph method.  Score direction must be validated before deployment.
-  \item \textbf{DOMINANT is the best unsupervised graph method.}
-        F1~=~0.212, AUC~=~0.669, exceeding all classical detectors by
-        $>$0.13 F1.
+  \item \textbf{DOMINANT is the best unsupervised graph-autoencoder method.}
+        F1~=~0.212, AUC~=~0.669, exceeding all classical density detectors
+        by $>$0.13 F1 ($\beta$-VAE, tabular, reaches F1~=~0.407).
   \item \textbf{Three features are cross-paradigm robust.}
         \texttt{lf\_53}, \texttt{lf\_90}, \texttt{af\_70} rank top-20 in
         RF, GBM (SHAP), and GraphSAGE (gradient attribution).
