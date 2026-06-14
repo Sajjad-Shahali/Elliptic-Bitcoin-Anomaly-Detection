@@ -108,8 +108,9 @@ def train_lstm_ae(
             optimizer.zero_grad(); loss.backward(); optimizer.step()
             total += loss.item() * len(batch)
         scheduler.step()
-        if epoch % 60 == 0:
-            print(f"  Epoch {epoch:3d}/{epochs}  loss={total/len(windows):.6f}")
+        lr_now = scheduler.get_last_lr()[0]
+        if epoch % 30 == 0:
+            print(f"  Epoch {epoch:3d}/{epochs}  loss={total/len(windows):.6f}  lr={lr_now:.2e}")
     return model
 
 
