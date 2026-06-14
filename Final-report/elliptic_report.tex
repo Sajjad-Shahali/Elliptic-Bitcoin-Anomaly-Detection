@@ -39,16 +39,16 @@ A 48-Experiment Benchmark on the Elliptic Bitcoin Dataset}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \begin{abstract}
-Detecting illicit activity on a public blockchain requires confronting three
-simultaneous challenges: severe class imbalance (2\,\% illicit among all
+Detecting illicit activity on a public blockchain involves facing three
+concurrent challenges: severe class imbalance (2\,\% illicit among all
 transactions), temporal concept drift (illicit rate shifting from 11.6\,\% in
 training to 6.5\,\% at test time), and a pseudonymous graph whose nodes carry
 165 anonymous features.  We present a systematic benchmark of \textbf{48~model
 variants} across five paradigms---unsupervised, supervised, deep neural, graph
 neural network (GNN), and semi-supervised---on the Elliptic Bitcoin dataset
-(203\,769 transactions, 234\,355 directed edges), organised into five iterative
+(203\,769 transactions, 234\,355 directed edges), organized into five iterative
 improvement rounds.  All models share a strict temporal train/test split
-respecting the time-series nature of the data.  The best result,
+that respects the time-series nature of the data.  The best result,
 \textbf{F1~=~0.8265}, is achieved by Gradient Boosting augmented with seven
 structural topology features.  GraphSAGEv2 reaches \textbf{F1~=~0.698} using
 graph message passing over node features and topology, recovering 84.5\,\% of
@@ -57,9 +57,7 @@ exceed F1~=~0.076; the course-derived DOMINANT graph autoencoder reaches
 F1~=~0.212.  A controlled GNN ablation shows that
 LayerNorm and self-loops ($+0.068$ F1) matter more than depth or attention.
 $\beta$-VAE with $\beta{=}0.01$ achieves F1~=~0.407, the best purely
-unsupervised result.  SHAP and gradient attribution identify three
-cross-paradigm signals---\texttt{lf\_53}, \texttt{lf\_90},
-\texttt{af\_70}---ranking top-20 in every model family.
+unsupervised result.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -71,17 +69,17 @@ $\beta$-VAE, EVT threshold, SHAP, Optuna, class imbalance, Elliptic dataset
 \section{Introduction}
 
 Bitcoin's blockchain is fully public yet pseudonymous: every transaction is
-permanently recorded but the identities behind wallet addresses remain opaque.
+permanently recorded, but the identities behind wallet addresses remain hidden.
 This pseudonymity has made Bitcoin a vehicle for money laundering, ransomware
 payments, and darknet market settlements.  Traditional anti-money-laundering
-(AML) controls rely on verified identity; blockchain forensics must instead
+(AML) controls rely on verified identity, while blockchain forensics must
 infer intent from transaction patterns and graph structure.
 
 The Elliptic dataset~\cite{weber2019} is the largest publicly available labeled
 graph of real Bitcoin transactions: 203\,769 transactions, 234\,355 directed
 edges, 4\,545 labeled illicit (2\,\%), 42\,019 labeled licit (21\,\%), and
 157\,205 unlabeled (77\,\%) over 49 time steps spanning roughly two years.
-Each node carries 165 anonymous features---93 local statistics and 71 aggregated
+Each node carries 165 anonymous features, 93 local statistics and 71 aggregated
 neighborhood summaries (some sources count 166 including the time-step
 index, which we treat as a split attribute rather than a predictive feature).
 
@@ -91,7 +89,7 @@ index, which we treat as a split attribute rather than a predictive feature).
         6.5\,\% in the test window.  A naive majority classifier achieves
         93.5\,\% accuracy while detecting zero illicit transactions, making
         accuracy a completely uninformative metric.
-  \item \textbf{Temporal concept drift.}  Illicit rate drops 11.6\,\%$\!\to\!$
+  \item \textbf{Temporal concept drift.}  Illicit rate drops from 11.6\,\% to
         6.5\,\% from train to test (44\,\% relative decline).  Random shuffling
         leaks future patterns into training, inflating every metric.
   \item \textbf{Anonymous features.}  Elliptic has not published feature
@@ -105,7 +103,7 @@ index, which we treat as a split attribute rather than a predictive feature).
         baseline, or do illicit transactions fail to form anomalous clusters?
   \item \textbf{RQ2}: How much does graph structure add over tabular supervised
         models, and what fraction of the supervised ceiling can a GNN recover?
-  \item \textbf{RQ3}: Which GNN design choices (depth, width, normalisation,
+  \item \textbf{RQ3}: Which GNN design choices (depth, width, normalization,
         attention) matter most on a sparse graph (avg.\ degree~2.3)?
   \item \textbf{RQ4}: Do any features rank consistently across heterogeneous
         model families?
@@ -197,14 +195,14 @@ Aggregated feat. & 71       & \texttt{af\_1}--\texttt{af\_71} \\
 \end{tabular}
 \end{table}
 
-Published by Elliptic in collaboration with MIT~\cite{weber2019}.  Feature
+The Elliptic dataset was published by Elliptic in collaboration with MIT.  Feature
 semantics are not published; columns carry only numerical indices.
 
 \subsection{Temporal Split and Evaluation Protocol}
 
 A strict temporal split is mandatory: Bitcoin transactions have causal ordering,
 and random shuffling inflates all metrics by allowing interpolation between
-past and future behaviour.
+past and future behavior.
 
 \begin{table}[htbp]
 \centering
@@ -246,7 +244,7 @@ Each paradigm uses different training data and threshold strategy, as
 summarised in Table~\ref{tab:eval_protocol}.
 \textit{Note on supervision}: models in the IsoForest/LOF and
 OCSVM/AE/VAE rows use no labels for \emph{training}, but their
-classification thresholds are selected by optimising F1 on a labeled
+classification thresholds are selected by optimizing F1 on a labeled
 subset.  They are therefore better described as \emph{semi-supervised at
 threshold-selection stage} rather than fully unsupervised; truly label-free
 thresholds (EVT) are evaluated separately.
@@ -429,7 +427,7 @@ Semi-supervised GBM with pseudo-labels reaches F1~=~0.8235
            autoencoder variant.  Both labels include ``(best)'' to indicate
            they represent the family ceiling, not a single fixed model.
            GBM peaks at F1~=~0.827; GraphSAGEv2 reaches 0.729;
-           autoencoder family peaks at 0.407 ($\beta$-VAE, $\beta{=}0.01$).}
+           the autoencoder family peaks at 0.407 ($\beta$-VAE, $\beta{=}0.01$).}
   \label{fig:round_progression}
 \end{figure}
 
@@ -584,7 +582,7 @@ In this configuration and feature setting, vanilla GAT and GATv2 are
 counterproductive on a sparse graph (avg.\ degree~2.3); recent work with
 Chebyshev convolutions and deeper GATv2 + skip connections has narrowed
 the gap on Elliptic under different feature subsets, so the finding should
-not be generalised beyond mean-aggregation architectures at this scale.
+not be generalized beyond mean-aggregation architectures at this scale.
 
 \begin{figure}[htbp]
   \centering
@@ -604,7 +602,7 @@ not be generalised beyond mean-aggregation architectures at this scale.
            F1, ROC-AUC, Average Precision, Precision, and Recall.
            GraphSAGEv2 (Exp~6) and the Optuna-tuned variant (Exp~7)
            dominate across all axes, while GAT family experiments show
-           systematically lower coverage---confirming mean aggregation
+           systematically lower coverage, confirming mean aggregation
            outperforms attention on this sparse graph.}
   \label{fig:gnn_radar}
 \end{figure}
@@ -793,9 +791,9 @@ semantics via Elliptic collaboration is the primary open question.
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\columnwidth]{shap_gbm_beeswarm.png}
-  \caption{SHAP beeswarm for GBM (Optuna, F1~=~0.824)---the best
+  \caption{SHAP beeswarm for GBM (Optuna, F1~=~0.824), the best
            tabular model.  Each dot is one test-set transaction (sample
-           of 3\,000); colour encodes feature value (red=high, blue=low).
+           of 3\,000); color encodes feature value (red=high, blue=low).
            Positive SHAP pushes toward illicit; negative toward licit.
            Features \texttt{lf\_53}, \texttt{lf\_90}, and \texttt{af\_70}
            rank in the top band and appear consistently across RF, GBM,
@@ -832,8 +830,8 @@ ensemble of GBM + GraphSAGEv2 is the natural next step.
 
 \textbf{RQ3 --- GNN design.}
 LayerNorm+self-loops ($+0.068$) $>$ depth ($+0.038$) $>$ width ($+0.052$
-total) $>$ lr tuning ($+0.007$).  Mean aggregation dominates attention on
-sparse graphs.
+total) $>$ learning-rate tuning ($+0.007$).  Mean aggregation dominates
+attention on sparse graphs.
 
 \textbf{RQ4 --- Robust features.}
 \texttt{lf\_53}, \texttt{lf\_90}, \texttt{af\_70} are top-20 across all
@@ -848,8 +846,8 @@ deploying any reconstruction-based AML system.
 
 \textbf{$\beta$-VAE.}
 Lower $\beta$ preserves reconstruction dominance; $\beta{\ge}2$ compresses
-licit and illicit together.  The ceiling at F1~$\approx$~0.41 is the
-fundamental limit of unsupervised reconstruction-based detection here.
+licit and illicit representations together.  The ceiling at F1~$\approx$~0.41
+is the fundamental limit of unsupervised reconstruction-based detection here.
 
 \textbf{Semi-supervised pseudo-labels.}
 GBM gains $\Delta{=}-0.0006$: supervised boundary is already saturated.
@@ -857,24 +855,24 @@ GraphSAGEv2 gains $+0.031$: extra pseudo-labeled nodes populate graph
 neighborhoods during message passing.
 
 \textbf{Concept drift.}
-Illicit rate drops 11.6\,\%$\to$6.5\,\% over 15 steps.  Production
+Illicit rate drops from 11.6\,\% to 6.5\,\% over 15 steps.  Production
 systems need temporal threshold recalibration; practical strategies include
-sliding-window F1 re-optimisation on the most recent labeled window,
+sliding-window F1 re-optimization on the most recent labeled window,
 Bayesian prior-shift correction, and adaptive class-weight schedules tied
 to rolling illicit-rate estimates.
 
 \textbf{Limitations.}
-(1)~Feature semantics unknown---robust features cannot be interpreted without
+(1)~Feature semantics unknown; robust features cannot be interpreted without
 Elliptic collaboration.
 (2)~GAT Optuna tuning incomplete; recent Elliptic work with Chebyshev
 convolutions and skip-connected GATv2 reports higher GNN F1 under
-different feature subsets---our GNN results represent a strong but not
+different feature subsets, so our GNN results represent a strong but not
 exhaustive upper bound.
 (3)~GBM + GraphSAGEv2 stacking unexplored.
 (4)~DOMINANT with more epochs and $\alpha$ tuning may gain further.
 (5)~Per-transaction LSTM-AE (vs.\ timestep aggregate) not evaluated.
 (6)~This work positions itself as a comprehensive baseline benchmark
-across paradigms; direct comparison to reported Elliptic SOTA
+across paradigms; direct comparison to reported Elliptic state-of-the-art
 (e.g., Chebyshev-GCN, N2V-GCN) is left for future work.
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -904,7 +902,7 @@ improvement rounds.  Six actionable findings:
         RF, GBM (SHAP), and GraphSAGE (gradient attribution).
 \end{enumerate}
 
-\textbf{Future work}: (1)~GBM + GraphSAGEv2 stacking;
+\textbf{Future work}: (1)~GBM + GraphSAGEv2 stacking ensemble;
 (2)~per-transaction LSTM-AE; (3)~EvolveGCN~\cite{pareja2020evolve} for
 temporal drift; (4)~online threshold recalibration;
 (5)~GNNExplainer for node-level attribution;
