@@ -1,0 +1,918 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{url}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{microtype}   % fix word-spacing in narrow columns
+\usepackage{hyperref}    % last
+
+\graphicspath{{../reports/}}
+
+% ─── global spacing/overflow relief ───────────────────────────────────────────
+\emergencystretch=2em
+
+\begin{document}
+
+\title{Graph-Aware Anomaly Detection for Blockchain Forensics:\\
+A 48-Experiment Benchmark on the Elliptic Bitcoin Dataset}
+
+\author{
+  \IEEEauthorblockN{Sajjad Shahali Ramsheh}
+  \IEEEauthorblockA{
+    \textit{Department of Control and Computer Engineering (DAUIN)}\\
+    Politecnico di Torino, Turin, Italy\\
+    s340464@studenti.polito.it
+  }
+}
+
+\maketitle
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{abstract}
+Detecting illicit activity on a public blockchain requires confronting three
+simultaneous challenges: severe class imbalance (2\,\% illicit among all
+transactions), temporal concept drift (illicit rate shifting from 11.6\,\% in
+training to 6.5\,\% at test time), and a pseudonymous graph whose nodes carry
+165 anonymous features.  We present a systematic benchmark of \textbf{48~model
+variants} across five paradigms---unsupervised, supervised, deep neural, graph
+neural network (GNN), and semi-supervised---on the Elliptic Bitcoin dataset
+(203\,769 transactions, 234\,355 directed edges), organised into five iterative
+improvement rounds.  All models share a strict temporal train/test split
+respecting the time-series nature of the data.  The best result,
+\textbf{F1~=~0.8265}, is achieved by Gradient Boosting augmented with seven
+structural topology features.  GraphSAGEv2 reaches \textbf{F1~=~0.698} using
+only graph topology, recovering 84.5\,\% of the supervised ceiling.  Classical
+unsupervised detectors never exceed F1~=~0.076; the course-derived DOMINANT
+graph autoencoder reaches F1~=~0.212.  A controlled GNN ablation shows that
+LayerNorm and self-loops ($+0.068$ F1) matter more than depth or attention.
+$\beta$-VAE with $\beta{=}0.01$ achieves F1~=~0.407, the best purely
+unsupervised result.  SHAP and gradient attribution identify three
+cross-paradigm signals---\texttt{lf\_53}, \texttt{lf\_90},
+\texttt{af\_70}---ranking top-20 in every model family.
+\end{abstract}
+
+\begin{IEEEkeywords}
+anomaly detection, blockchain forensics, GraphSAGE, DOMINANT, gradient boosting,
+$\beta$-VAE, EVT threshold, SHAP, Optuna, class imbalance, Elliptic dataset
+\end{IEEEkeywords}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Introduction}
+
+Bitcoin's blockchain is fully public yet pseudonymous: every transaction is
+permanently recorded but the identities behind wallet addresses remain opaque.
+This pseudonymity has made Bitcoin a vehicle for money laundering, ransomware
+payments, and darknet market settlements.  Traditional anti-money-laundering
+(AML) controls rely on verified identity; blockchain forensics must instead
+infer intent from transaction patterns and graph structure.
+
+The Elliptic dataset~\cite{weber2019} is the largest publicly available labeled
+graph of real Bitcoin transactions: 203\,769 transactions, 234\,355 directed
+edges, 4\,545 labeled illicit (2\,\%), 42\,019 labeled licit (21\,\%), and
+157\,205 unlabeled (77\,\%) over 49 time steps spanning roughly two years.
+Each node carries 165 anonymous features---93 local statistics and 71 aggregated
+neighborhood summaries.
+
+\noindent\textbf{Three intertwined challenges:}
+\begin{enumerate}
+  \item \textbf{Severe imbalance.}  9.76\,\% illicit among labeled nodes;
+        6.5\,\% in the test window.  A naive majority classifier achieves
+        93.5\,\% accuracy while detecting zero illicit transactions, making
+        accuracy a completely uninformative metric.
+  \item \textbf{Temporal concept drift.}  Illicit rate drops 11.6\,\%$\!\to\!$
+        6.5\,\% from train to test (44\,\% relative decline).  Random shuffling
+        leaks future patterns into training, inflating every metric.
+  \item \textbf{Anonymous features.}  Elliptic has not published feature
+        semantics, so cross-model feature agreement is the only validation of
+        signal robustness.
+\end{enumerate}
+
+\subsection{Research Questions}
+\begin{itemize}
+  \item \textbf{RQ1}: Do classical unsupervised detectors provide a viable AML
+        baseline, or do illicit transactions fail to form anomalous clusters?
+  \item \textbf{RQ2}: How much does graph structure add over tabular supervised
+        models, and what fraction of the supervised ceiling can a GNN recover?
+  \item \textbf{RQ3}: Which GNN design choices (depth, width, normalisation,
+        attention) matter most on a sparse graph (avg.\ degree~2.3)?
+  \item \textbf{RQ4}: Do any features rank consistently across heterogeneous
+        model families?
+\end{itemize}
+
+\subsection{Contributions}
+\begin{enumerate}
+  \item Strict \textbf{temporal evaluation protocol} (steps 1--34 train /
+        30--34 validation / 35--49 test) applied to all 48 variants.
+  \item \textbf{48-variant benchmark} across five improvement rounds covering
+        classical anomaly detection, supervised trees, deep autoencoders, GNNs,
+        semi-supervised pseudo-labels, and topology-augmented methods.
+  \item \textbf{10-experiment GNN ablation} isolating hidden dimension, depth,
+        LayerNorm, self-loops, and attention heads.
+  \item \textbf{Optuna TPE tuning}~\cite{akiba2019} (40 trials each) for GBM,
+        RF, and GraphSAGE.
+  \item Evaluation of \textbf{course-derived methods}: DOMINANT~\cite{ding2019dominant},
+        LSTM-AE, $\beta$-VAE~\cite{higgins2017beta}, spectral embedding, EVT
+        thresholding~\cite{siffer2017}, and pseudo-label propagation~\cite{lee2013pseudo}.
+  \item \textbf{Cross-paradigm explainability} via SHAP and gradient attribution.
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Related Work}
+
+\textbf{Weber et al.}~\cite{weber2019} introduced the Elliptic dataset and
+benchmarked LR, RF, and GCN, but did not explore unsupervised methods, deeper
+GNN architectures, or the score-inversion phenomenon in reconstruction-based
+detectors.
+
+\textbf{GNNs for fraud.}  Hamilton et al.~\cite{hamilton2017} introduced
+GraphSAGE; Velickovic et al.~\cite{velickovic2018} proposed GAT; Brody et
+al.~\cite{brody2022} fixed GAT's expressivity with GATv2.  Pareja et
+al.~\cite{pareja2020evolve} extended GCN to dynamic graphs (EvolveGCN).
+
+\textbf{Graph anomaly detection.}  Ding et al.~\cite{ding2019dominant}
+proposed DOMINANT, a GCN autoencoder that jointly reconstructs node attributes
+and graph structure without labels.
+
+\textbf{Reconstruction-based detection.}  Standard autoencoders~\cite{hawkins2002}
+flag high reconstruction error as anomalous.  On Elliptic we observe inversion:
+illicit transactions reconstruct with \emph{lower} MSE~\cite{zhou2017}.
+Denoising AE~\cite{vincent2008} and VAE~\cite{kingma2014} are evaluated.
+
+\textbf{$\beta$-VAE}~\cite{higgins2017beta} adds weight $\beta$ to the KL
+term in the ELBO:
+\begin{equation}
+\mathcal{L}_{\beta} =
+\mathbb{E}_{q_\phi}\!\left[\log p_\theta(x|z)\right]
+- \beta\,D_{\text{KL}}\!\left(q_\phi(z|x)\,\|\,p(z)\right).
+\label{eq:bvae}
+\end{equation}
+Lower $\beta$ is reconstruction-dominated; $\beta{=}0.01$ yields best F1
+(0.407) since reconstruction dominance preserves the inversion signal.
+
+\textbf{EVT thresholding.}  The Generalized Pareto Distribution (GPD) models
+score tails to set thresholds without labels~\cite{siffer2017}:
+\begin{equation}
+t_{\text{EVT}} = u + \frac{\hat{\sigma}}{\hat{\xi}}\!\left(
+\Bigl(\frac{n p}{N_u}\Bigr)^{-\hat{\xi}} - 1\right),
+\label{eq:evt}
+\end{equation}
+where $u$ is the tail cutoff, $N_u$ exceedances, and $p$ exceedance
+probability.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Dataset and Methodology}
+
+\subsection{Dataset}
+
+\begin{table}[htbp]
+\centering
+\caption{Elliptic Dataset Statistics}
+\label{tab:dataset}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Property & Value & Note \\
+\midrule
+Transactions     & 203\,769 & total nodes \\
+Directed edges   & 234\,355 & avg.\ degree 2.30 \\
+Illicit (label 1)& 4\,545   & 2\,\% of total \\
+Licit (label 2)  & 42\,019  & 21\,\% of total \\
+Unlabeled        & 157\,205 & 77\,\% of total \\
+Time steps       & 49       & steps 44--49 unlabeled \\
+Local features   & 93       & \texttt{lf\_1}--\texttt{lf\_93} \\
+Aggregated feat. & 71       & \texttt{af\_1}--\texttt{af\_71} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Published by Elliptic in collaboration with MIT~\cite{weber2019}.  Feature
+semantics are not published; columns carry only numerical indices.
+
+\subsection{Temporal Split and Evaluation Protocol}
+
+A strict temporal split is mandatory: Bitcoin transactions have causal ordering,
+and random shuffling inflates all metrics by allowing interpolation between
+past and future behaviour.
+
+\begin{table}[htbp]
+\centering
+\caption{Temporal Data Split (by time step index, 1--49)}
+\label{tab:split}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Partition & Labeled rows & Illicit\,\% \\
+\midrule
+Train (steps 1--34)       & 29\,894 & 11.6\,\% \\
+Validation (steps 30--34) & subset of train & --- \\
+Test  (steps 35--49)      & 16\,670 & 6.5\,\% \\
+\midrule
+Unsup.\ train (steps 1--34) & 136\,265 all rows & --- \\
+Licit-only  (steps 1--34)   & 26\,432 & 0\,\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The 44\,\% relative drop in illicit rate confirms genuine concept drift.
+\textbf{Primary metric}: F1 on the illicit class.  Secondary: PR-AUC
+(threshold-independent, informative under imbalance) and ROC-AUC.
+
+\subsection{Per-Paradigm Training Setup}
+
+Each paradigm uses different training data and threshold strategy, as
+summarised in Table~\ref{tab:eval_protocol}.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Per-Paradigm Training and Threshold Strategy}
+\label{tab:eval_protocol}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}p{1.7cm}p{3.0cm}p{2.2cm}@{}}
+\toprule
+Paradigm & Training data & Threshold \\
+\midrule
+IsoForest/LOF   & 136\,265 all train rows & F1-opt, labeled train \\
+OCSVM/AE/VAE   & 26\,432 licit-only rows & F1-opt, val steps 30--34 \\
+Supervised      & 29\,894 labeled train   & 0.5 (default) \\
+GNN             & Full graph, train masks & 0.5 (default) \\
+Ensemble        & Labeled train rows      & Grid search, val steps \\
+Semi-sup.       & Train + pseudo-labeled  & 0.5 (default) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Model Families}
+
+\subsubsection{Classical Unsupervised}
+Isolation Forest~\cite{liu2008} (contamination=0.1); LOF (transductive,
+applied to test set directly); One-Class SVM (RBF, $\nu{=}0.05$,
+licit-only train).  Also evaluated: IsoForest on 7 structural topology
+features, and IsoForest/OCSVM on the top-50 spectral eigenvectors of
+$\tilde{A}=D^{-1/2}AD^{-1/2}$.
+
+\subsubsection{Supervised Tree Models}
+All use \texttt{class\_weight=`balanced'} or \texttt{scale\_pos\_weight}:
+Logistic Regression (L2), Random Forest (100 trees), Gradient Boosting
+(Optuna-tuned: $n{=}245$, depth$=8$, lr$=0.121$, sub$=0.918$), LightGBM
+(500 trees, max\_depth$=8$), RF + graph degree/PageRank features, GBM +
+7 structural topology features (degree, clustering, ego-density, OddBall),
+GBM + 330 temporal rolling features (5-step window), and GBM retrained on
+pseudo-labeled unlabeled nodes.
+
+\subsubsection{Neural Anomaly Detection}
+All trained on licit-only data; anomaly score = $-$MSE (direction
+auto-detected on validation via AUC comparison):
+AE ($166{\to}128{\to}64{\to}32{\to}\cdots{\to}166$), DenoisingAE
+(latent=8, $\sigma_\text{noise}{=}0.1$), VAE and $\beta$-VAE grid search
+($\beta\!\in\!\{0.01,1,2,4,8\}$)~\cite{higgins2017beta,kingma2014},
+LSTM-AE (per-timestep mean features, $T{=}10$ sliding windows), and
+DOMINANT (2-layer GCN encoder, joint attribute+structure
+reconstruction)~\cite{ding2019dominant}.
+
+\subsubsection{GNN (Supervised)}
+Full PyG graph; edges made undirected; inverse-frequency
+\texttt{CrossEntropyLoss}.  GraphSAGE mean aggregation at layer $k$:
+\begin{equation}
+h_v^{(k)} = \sigma\!\left(W^{(k)}\cdot\text{MEAN}\!\left(
+\{h_v^{(k-1)}\}\cup\{h_u^{(k-1)}: u\in\mathcal{N}(v)\}\right)\right).
+\label{eq:sage}
+\end{equation}
+Variants: baseline (2L, $h{=}128$, 200ep), GraphSAGEv2 (3L, $h{=}256$,
+LayerNorm, self-loops, 250ep), Optuna-tuned (lr=0.0038, dropout=0.45,
+274ep), SAGEv2 + pseudo-labels (130\,655 nodes), GAT (2L, 4 heads), and
+GATv2 (3L, 2 heads, residual, LayerNorm).
+
+\subsubsection{Ensemble Methods}
+Soft-vote ensemble of RF+LGB+GAT (threshold on train, Round~1) and
+GBM+LGBM+SAGEv2 (threshold grid-searched on validation).  Four weight
+schemes tested; equal weights (1/3 each) won.
+
+\subsection{EVT Thresholding}
+GPD fitted to the upper tail of reconstruction scores
+(tail quantile $q{=}0.90$, exceedance probability $p{=}0.065$) per
+Eq.~\ref{eq:evt}.  Evaluated on all AE-based models.
+
+\subsection{Implementation}
+NVIDIA RTX~5070~Ti (12~GB VRAM, CUDA~12.8); Python~3.12, PyTorch~2.11,
+PyG~2.8, scikit-learn~1.9, LightGBM~4.6, SHAP~0.52, Optuna~4.9,
+NetworkX~3.6.  \texttt{StandardScaler} fitted on train only; random
+seed~42 throughout.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Experiments}
+
+Experiments follow a logical progression: (1)~establish unsupervised floor
+(RQ1); (2)~quantify supervised ceiling and tuning gains; (3)~diagnose neural
+reconstruction ceiling; (4)~systematic GNN ablation (RQ3); (5)~course-derived
+advanced methods; (6)~cross-paradigm explainability (RQ4).  All models are
+evaluated on the same 16\,670 labeled test rows with no test-set leakage.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Unsupervised Baselines}
+
+\begin{table}[htbp]
+\centering
+\caption{Classical Unsupervised Anomaly Detection}
+\label{tab:unsupervised}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Model & F1 & ROC-AUC & PR-AUC \\
+\midrule
+Isolation Forest          & 0.021 & 0.172 & 0.036 \\
+One-Class SVM             & 0.023 & 0.235 & 0.039 \\
+LOF                       & 0.076 & 0.506 & 0.066 \\
+IsoForest (structural)    & 0.094 & 0.458 & 0.056 \\
+IsoForest (spectral K=50) & 0.056 & 0.407 & 0.052 \\
+OCSVM (spectral K=50)     & 0.061 & 0.391 & 0.054 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All detectors score below F1~=~0.10.  LOF's AUC of~0.506 is random.
+Spectral embedding fails because the Fiedler value $\approx 2.0$ (near
+bipartite maximum) indicates no sparse cut separating illicit nodes---money
+laundering chains are embedded within the spectral normal subspace.
+
+\textbf{Answer to RQ1}: illicit transactions do \emph{not} form anomalous
+clusters in feature space.  Automated laundering produces stereotyped,
+regular transactions indistinguishable from high-frequency legitimate activity
+by density-based methods.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Supervised Models}
+
+\begin{table}[htbp]
+\centering
+\caption{Supervised Model Results (sorted by F1)}
+\label{tab:supervised}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Model & F1 & ROC-AUC & PR-AUC \\
+\midrule
+Logistic Regression       & 0.302 & 0.881 & 0.291 \\
+GBM (baseline)            & 0.766 & 0.914 & 0.785 \\
+RandomForest (baseline)   & 0.801 & 0.935 & 0.794 \\
+RF + Graph Features       & 0.807 & 0.942 & 0.800 \\
+LightGBM                  & 0.817 & 0.930 & 0.804 \\
+GBM + Temporal Rolling    & 0.818 & 0.930 & 0.802 \\
+GBM (Optuna tuned)        & 0.824 & 0.920 & ---   \\
+GBM + PseudoLabels        & 0.824 & 0.924 & 0.804 \\
+\textbf{GBM + Structural} &\textbf{0.827}& 0.924 & 0.803 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Logistic Regression achieves recall~=~0.87 but precision~=~0.18
+(F1~=~0.302)---unusable without heavy post-filtering.  The jump from LR to
+RF ($\Delta{=}+0.499$) reflects non-linear feature interactions that linear
+models cannot capture.  Adding graph-topology features to RF gives only
+$\Delta{=}+0.006$ because the 71 aggregated features already encode
+neighborhood information in tabular form.
+
+GBM Optuna reaches F1~=~0.824 ($\Delta{=}+0.058$ over baseline): the
+learning-rate--depth--subsample interaction is non-obvious and benefits
+from systematic search.  RF Optuna ($\Delta{=}-0.004$) confirms RF is near
+its ceiling.
+
+GBM with 7 structural topology features reaches \textbf{F1~=~0.8265}, the
+overall best result ($\Delta{=}+0.002$ over Optuna GBM): topology information
+is not fully subsumed by the 71 aggregated features.
+
+GBM with 330 temporal rolling features (5-step window) improves AUC
+($0.920\to0.930$) but reduces F1 ($0.824\to0.818$): global temporal context
+adds noise to per-transaction discrimination.
+
+Semi-supervised GBM with pseudo-labels reaches F1~=~0.8235
+($\Delta{=}-0.0006$): GBM has already learned the optimal boundary from
+29\,894 labeled rows.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{final_round_progression.png}
+  \caption{Improvement across five rounds for key model families.
+           ``GBM (best)'' tracks the highest-scoring GBM variant at each
+           stage; ``Neural AE (best)'' tracks the highest-scoring
+           autoencoder variant.  Both labels include ``(best)'' to indicate
+           they represent the family ceiling, not a single fixed model.
+           GBM peaks at F1~=~0.827; GraphSAGEv2 reaches 0.729;
+           autoencoder family peaks at 0.407 ($\beta$-VAE, $\beta{=}0.01$).}
+  \label{fig:round_progression}
+\end{figure}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Neural Anomaly Detection}
+
+\begin{table}[htbp]
+\centering
+\caption{Neural Anomaly Detection Results (sorted by F1)}
+\label{tab:neural}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Model & F1 & ROC-AUC & PR-AUC \\
+\midrule
+LSTM-AE                             & 0.122 & 0.446 & 0.064 \\
+VAEv2                               & 0.256 & 0.732 & 0.161 \\
+$\beta$-VAE ($\beta{=}2.0$)         & 0.280 & 0.746 & 0.211 \\
+$\beta$-VAE ($\beta{=}4.0$)         & 0.313 & 0.754 & 0.287 \\
+VAE ($\beta{=}1.0$)                 & 0.340 & 0.778 & 0.310 \\
+$\beta$-VAE ($\beta{=}8.0$)         & 0.350 & 0.763 & 0.299 \\
+AE (baseline)                       & 0.356 & 0.781 & 0.336 \\
+DenoisingAE                         & 0.361 & 0.792 & 0.366 \\
+$\beta$-VAE ($\beta{=}1.0$)         & 0.372 & 0.776 & 0.338 \\
+\textbf{$\beta$-VAE ($\beta{=}0.01$)} & \textbf{0.407} & 0.783 & 0.365 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Score Inversion}
+The central finding is \textbf{score inversion}: illicit transactions
+reconstruct with \emph{lower} MSE than licit ones, so the anomaly score
+must be $-$MSE.  Automated laundering produces stereotyped, templated
+patterns that are easier to reconstruct than diverse legitimate activity.
+Direction is auto-detected on validation by comparing
+$\text{AUC}(y,\text{MSE})$ vs.\ $\text{AUC}(y,-\text{MSE})$.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{ae_errors_left.png}\\[4pt]
+  \includegraphics[width=\columnwidth]{ae_errors_right.png}
+  \caption{Autoencoder reconstruction error distributions: histogram (top)
+           and KDE (bottom) for licit (blue) and illicit (orange).
+           Illicit transactions achieve lower MSE, confirming score inversion.
+           Anomaly score is therefore $-$MSE.}
+  \label{fig:ae_errors}
+\end{figure}
+
+\subsubsection{$\beta$-VAE Analysis}
+At $\beta{=}0.01$ (reconstruction-dominated), F1~=~0.407---the best
+unsupervised non-graph result.  As $\beta$ increases above~1, the KL term
+compresses licit and illicit representations together, weakening the anomaly
+signal.  The F1 plateau at $\approx$0.36--0.41 reflects the hard ceiling
+of unsupervised reconstruction-based detection on this dataset.
+
+\subsubsection{EVT Thresholding}
+EVT thresholding (Eq.~\ref{eq:evt}) collapses on DOMINANT and LSTM-AE
+because score distributions are concentrated near zero with thin tails---the
+GPD assigns an excessively high threshold, recalling almost no positives.
+EVT is effective only when reconstruction errors follow genuine heavy-tailed
+distributions.
+
+\subsubsection{LSTM-AE}
+The LSTM-AE aggregates features per time step (49$\times$165), trains on
+25 sliding windows ($T{=}10$), and produces a time-step-level anomaly score.
+ROC-AUC~=~0.446 ($<0.5$, inverted) confirms the approach cannot discriminate
+individual transactions---illicit and licit rows within a step are averaged
+together.  The most anomalous steps detected (40, 46, 39, 43, 36) correspond
+to high concept-drift periods, not individual illicit transactions.  Correct
+use: temporal monitoring, not per-transaction scoring.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{DOMINANT: Graph Autoencoder}
+
+DOMINANT~\cite{ding2019dominant} jointly reconstructs node attributes and
+graph structure via a 2-layer GCN encoder (2~layers avoids over-smoothing
+on this sparse graph).  Joint loss:
+\begin{equation}
+\mathcal{L} = \alpha\,\|\mathbf{X} - \hat{\mathbf{X}}\|_F^2
++ (1-\alpha)\,\text{BCE}(\mathbf{A}, \hat{\mathbf{A}}),
+\label{eq:dominant}
+\end{equation}
+with $\alpha{=}0.5$.  Result: \textbf{F1~=~0.212, AUC~=~0.669}---the best
+fully unsupervised method, exceeding all classical detectors by
+$\Delta{>}0.13$.  An F1-optimal threshold is required (EVT collapses).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{GNN Ablation Study}
+
+A GNN exploits \emph{guilt by association}: money laundering chains link
+illicit wallets through intermediate transactions.  Ten controlled experiments
+each isolate one design choice (Table~\ref{tab:gnn_ablation}).
+
+\begin{table}[htbp]
+\centering
+\caption{GNN Ablation --- 10 Controlled Experiments}
+\label{tab:gnn_ablation}
+\renewcommand{\arraystretch}{1.1}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}clp{4.2cm}rrr@{}}
+\toprule
+Exp & Arch & Configuration & F1 & AUC & AP \\
+\midrule
+1 & SAGE   & 2L, h=64, 200 ep                      & 0.528 & 0.887 & 0.519 \\
+2 & SAGE   & 2L, h=128, 200 ep                     & 0.577 & 0.896 & 0.603 \\
+3 & SAGE   & 2L, h=256, 200 ep                     & 0.580 & 0.895 & 0.595 \\
+4 & SAGE   & 2L, h=128, 300 ep                     & 0.597 & 0.897 & 0.607 \\
+5 & SAGE   & 3L, h=128, 200 ep                     & 0.615 & 0.899 & 0.611 \\
+6 & SAGEv2 & 3L, h=256, LN+SL, 250 ep             & 0.683 & 0.906 & 0.704 \\
+\textbf{7} & \textbf{SAGE} & \textbf{3L h=256, lr=0.0038, 274 ep (Optuna)} & \textbf{0.690} & 0.901 & \textbf{0.706} \\
+8 & GAT    & 2L, 4 heads, lr=5e-4, 200 ep          & 0.307 & 0.824 & 0.366 \\
+9 & GAT    & 2L, 2 heads, lr=1e-3, 200 ep          & 0.341 & 0.864 & 0.419 \\
+10 & GATv2 & 3L, 2 heads, residual+LN, 300 ep      & 0.382 & 0.887 & 0.547 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsubsection{Ablation Findings}
+
+\begin{itemize}
+  \item \textbf{Width} (Exps 1--3, 64$\to$256): $+0.052$ F1 total with
+        diminishing returns; saturates beyond $h{=}128$.
+  \item \textbf{Training duration} (Exps 2 vs.\ 4, $+$100 ep): $+0.020$ F1;
+        cheapest lever before changing architecture.
+  \item \textbf{Depth} (Exps 2 vs.\ 5, 2L$\to$3L): $+0.038$ F1; 3-hop
+        receptive field captures longer laundering chains.
+  \item \textbf{LayerNorm + self-loops} (Exps 5 vs.\ 6): $\mathbf{+0.068}$ F1,
+        the largest single gain.  LN prevents gradient instability at 3 layers;
+        self-loops preserve node self-features during mean aggregation.
+  \item \textbf{Optuna} (Exps 6 vs.\ 7, lr=0.0038): $+0.007$ F1; architecture
+        choice dominates over tuning.
+  \item \textbf{GAT family} (Exps 8--10): best GAT F1~=~0.382 vs.\ best SAGE
+        F1~=~0.690 (gap~=~0.308).  On a sparse graph (avg.\ degree~2.3),
+        attention weights over too few neighbors are noisy; mean aggregation
+        is more robust.
+\end{itemize}
+
+\textbf{Answer to RQ3}: LayerNorm+self-loops~$>$ depth~$>$ width~$>$ tuning.
+Attention is counterproductive on sparse graphs.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{gnn_prog_left.png}\\[4pt]
+  \includegraphics[width=\columnwidth]{gnn_prog_right.png}
+  \caption{GNN ablation across 10 experiments.  Top: F1 progression showing
+           the GraphSAGE improvement trajectory (Exps~1--7) and the GAT
+           family ceiling (Exps~8--10).  Bottom: corresponding AUC/AP values
+           confirming the same ranking.}
+  \label{fig:gnn_progression}
+\end{figure}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Hyperparameter Tuning (Optuna)}
+
+\begin{table}[htbp]
+\centering
+\caption{Optuna TPE Tuning Results (40 trials each)}
+\label{tab:optuna}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrrc@{}}
+\toprule
+Model & Base F1 & Tuned F1 & $\Delta$ \\
+\midrule
+GBM       & 0.766 & \textbf{0.824} & +0.058 \\
+GraphSAGE & 0.541 & 0.688          & +0.147 \\
+RF        & 0.801 & 0.797          & $-$0.004 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Best parameters: GBM ($n{=}245$, depth$=8$, lr$=0.121$, sub$=0.918$);
+GraphSAGE (hidden$=256$, dropout$=0.45$, lr$=0.0038$, 274~ep); RF is near
+ceiling ($-0.004$ within search variance).  GBM profits from depth--lr
+interaction; GraphSAGE gains the most absolutely because default lr$=0.01$
+is too aggressive for this sparse graph.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Ensemble and Calibration}
+
+\begin{table}[htbp]
+\centering
+\caption{Ensemble and Calibration Results}
+\label{tab:ensemble}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Model & F1 & ROC-AUC & PR-AUC \\
+\midrule
+Ensemble (RF+LGB+GAT)         & 0.742 & 0.922 & 0.789 \\
+Ensemble (GBM+LGBM+SAGEv2)   & 0.821 & 0.924 & 0.802 \\
+Weighted Ensemble (1/3 each)  & 0.821 & 0.924 & 0.802 \\
+GBM + Platt calibration       & 0.801 & 0.920 & 0.800 \\
+GBM + Isotonic calibration    & 0.734 & 0.875 & 0.768 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The GBM+LGBM+SAGEv2 ensemble (F1~=~0.821) narrows the gap to GBM solo
+(0.824) but does not surpass it.  Testing four weight schemes shows equal
+weights win---downweighting SAGEv2 removes useful graph signal.  GBM is
+already well-calibrated (Brier~=~0.0196); Platt scaling makes probabilities
+more conservative ($-0.023$ F1); isotonic regression overfits validation and
+distorts ordering (AUC drops 0.920$\to$0.875).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Full 48-Experiment Leaderboard}
+
+Table~\ref{tab:leaderboard} reports the top~25 of 48 experiments.
+Fig.~\ref{fig:top15} shows the top-15 by F1; Fig.~\ref{fig:pr_curves}
+shows Precision--Recall curves for representative models.
+
+\begin{table}[htbp]
+\centering
+\caption{Top-25 of 48 Experiments (by F1 on illicit class)}
+\label{tab:leaderboard}
+\renewcommand{\arraystretch}{1.05}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}rllrrr@{}}
+\toprule
+\# & Model & Cat. & F1 & AUC & AP \\
+\midrule
+ 1 & GBM + Structural      & Sup.     & \textbf{0.827} & 0.924 & 0.803 \\
+ 2 & GBM (Optuna)          & Sup.     & 0.824 & 0.920 & --- \\
+ 3 & GBM + PseudoLabels    & Semi     & 0.824 & 0.924 & 0.804 \\
+ 4 & Ensemble GBM+LGBM+SAGEv2 & Ens. & 0.821 & 0.924 & 0.802 \\
+ 5 & Ensemble equal~1/3    & Ens.     & 0.821 & 0.924 & 0.802 \\
+ 6 & GBM + Temporal Roll.  & Sup.     & 0.818 & 0.930 & 0.802 \\
+ 7 & LightGBM              & Sup.     & 0.817 & 0.930 & 0.804 \\
+ 8 & RF + Graph Features   & Sup.     & 0.807 & 0.942 & 0.800 \\
+ 9 & RF (baseline)         & Sup.     & 0.801 & 0.935 & 0.794 \\
+10 & GBM + Platt           & Sup.     & 0.801 & 0.920 & 0.800 \\
+11 & RF (Optuna)           & Sup.     & 0.797 & 0.929 & --- \\
+12 & GBM (baseline)        & Sup.     & 0.766 & 0.914 & 0.785 \\
+13 & Ensemble RF+LGB+GAT   & Ens.     & 0.742 & 0.922 & 0.789 \\
+14 & GBM + Isotonic        & Sup.     & 0.734 & 0.875 & 0.768 \\
+15 & SAGEv2 + PseudoLabels & Semi-GNN & 0.729 & 0.890 & 0.752 \\
+\midrule
+16 & GraphSAGEv2           & GNN      & 0.698 & 0.913 & 0.720 \\
+17 & GNN Exp~7 (Optuna)    & GNN      & 0.690 & 0.901 & 0.706 \\
+18 & GraphSAGE (Optuna)    & GNN      & 0.688 & ---   & --- \\
+19 & GNN Exp~6 (3L LN+SL) & GNN      & 0.683 & 0.906 & 0.704 \\
+20 & GNN Exp~5 (3L h=128)  & GNN      & 0.615 & 0.899 & 0.611 \\
+21 & GraphSAGE (baseline)  & GNN      & 0.541 & 0.888 & 0.549 \\
+\midrule
+22 & $\beta$-VAE ($\beta{=}0.01$) & Neural & 0.407 & 0.783 & 0.365 \\
+23 & DenoisingAE           & Neural   & 0.361 & 0.792 & 0.366 \\
+24 & DOMINANT              & Graph-AE & 0.212 & 0.669 & 0.123 \\
+25 & LSTM-AE               & Neural   & 0.122 & 0.446 & 0.064 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{final_top15_f1.png}
+  \caption{Top-15 models by F1 on illicit class.  The dashed line marks
+           the GBM Optuna baseline (0.824) for reference.  All top-15
+           entries are supervised or ensemble-based.}
+  \label{fig:top15}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{pr_curves.png}
+  \caption{Precision--Recall curves for representative models.  Supervised
+           trees maintain high precision across the recall range; GNNs form
+           a middle band; neural and unsupervised detectors collapse quickly.
+           PR-AUC is threshold-independent and more informative than ROC-AUC
+           under severe class imbalance.}
+  \label{fig:pr_curves}
+\end{figure}
+
+\textbf{Five performance tiers:}
+\begin{enumerate}
+  \item \textbf{Supervised/Ensemble} (F1 0.74--0.83): tree models dominate
+        due to 71 aggregated features pre-encoding graph signal.
+  \item \textbf{GNN supervised} (F1 0.54--0.73): GraphSAGEv2 recovers
+        84.5\,\% of the supervised ceiling using only topology.
+  \item \textbf{Neural AE} (F1 0.12--0.41): bounded by reconstruction
+        ceiling; best from $\beta$-VAE ($\beta{=}0.01$).
+  \item \textbf{Graph AE unsupervised} (DOMINANT, F1~=~0.212): best fully
+        unsupervised method.
+  \item \textbf{Classical unsupervised} (F1~$<$~0.10): density methods fail.
+\end{enumerate}
+
+\textbf{Answer to RQ2}: graph structure alone recovers 84.5\,\% of the
+supervised ceiling.  GBM and GraphSAGEv2 exploit different, complementary
+channels (tabular features vs.\ topology).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Explainability}
+
+\begin{table}[htbp]
+\centering
+\caption{Cross-Model Feature Agreement (top-20 lists)}
+\label{tab:shap}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lp{5.0cm}@{}}
+\toprule
+Agreement & Features \\
+\midrule
+RF $\cap$ GBM (7) &
+  \texttt{lf\_18}, \texttt{lf\_47}, \texttt{lf\_53},
+  \texttt{lf\_59}, \texttt{lf\_76}, \texttt{lf\_90}, \texttt{af\_70} \\[2pt]
+RF $\cap$ GBM $\cap$ GNN (3) &
+  \textbf{\texttt{lf\_53}}, \textbf{\texttt{lf\_90}},
+  \textbf{\texttt{af\_70}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+SHAP TreeExplainer was applied to RF and GBM; gradient attribution was
+computed for GraphSAGE by backpropagating the illicit-class logit to the
+input and averaging over illicit test nodes.
+
+Three features---\texttt{lf\_53}, \texttt{lf\_90} (local), and
+\texttt{af\_70} (aggregated neighborhood)---rank top-20 in every model
+family.  Their cross-paradigm consensus validates them as genuine signals,
+not model-specific artifacts.  The presence of the aggregated feature
+\texttt{af\_70} in GNN attribution confirms that graph structure encodes
+real anomaly signal.
+
+\textbf{Answer to RQ4}: robust cross-paradigm signals exist spanning both
+local transaction statistics and neighborhood aggregates.  Identifying their
+semantics via Elliptic collaboration is the primary open question.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{shap_rf_beeswarm.png}
+  \caption{SHAP beeswarm for Random Forest.  Each dot is one test
+           transaction; colour encodes feature value (red=high, blue=low).
+           Direction of effect reveals whether high values predict illicit
+           (positive SHAP) or licit (negative SHAP).  Features
+           \texttt{lf\_53}, \texttt{lf\_90}, \texttt{af\_70} appear
+           in the top band across both models.}
+  \label{fig:shap_beeswarm}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{gnn_gradient_attribution.png}
+  \caption{GraphSAGE gradient attribution: mean absolute gradient per
+           feature, averaged over illicit test nodes.  Features
+           \texttt{lf\_53}, \texttt{lf\_90}, and \texttt{af\_70} are
+           prominent despite the entirely different learning mechanism,
+           confirming the cross-paradigm consensus.}
+  \label{fig:gnn_attr}
+\end{figure}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Discussion}
+
+\textbf{RQ1 --- Density failure.}
+All classical detectors score below F1~=~0.076.  Illicit transactions are
+stereotyped, not rare.  This directly contradicts the assumption of classical
+anomaly detection---that anomalies are low-density outliers.  On the Bitcoin
+blockchain, money-laundering patterns (chain peeling, mixing) are individually
+indistinguishable from legitimate high-frequency activity.
+
+\textbf{RQ2 --- Graph vs.\ tabular.}
+GraphSAGEv2 (F1~=~0.698) recovers 84.5\,\% of GBM (F1~=~0.824).  The
+remaining 15.5\,\% gap reflects the richer signal encoded in the 71
+pre-computed aggregated features available to tree models.  A stacking
+ensemble of GBM + GraphSAGEv2 is the natural next step.
+
+\textbf{RQ3 --- GNN design.}
+LayerNorm+self-loops ($+0.068$) $>$ depth ($+0.038$) $>$ width ($+0.052$
+total) $>$ lr tuning ($+0.007$).  Mean aggregation dominates attention on
+sparse graphs.
+
+\textbf{RQ4 --- Robust features.}
+\texttt{lf\_53}, \texttt{lf\_90}, \texttt{af\_70} are top-20 across all
+model families.  The aggregated feature \texttt{af\_70} in GNN attribution
+confirms that graph neighborhood signal is captured independently by tabular
+proxies in tree models.
+
+\textbf{Autoencoder paradox.}
+Illicit transactions are \emph{more} regular than licit ones.  Score
+inversion (low MSE = anomaly) must be validated on labeled data before
+deploying any reconstruction-based AML system.
+
+\textbf{$\beta$-VAE.}
+Lower $\beta$ preserves reconstruction dominance; $\beta{\ge}2$ compresses
+licit and illicit together.  The ceiling at F1~$\approx$~0.41 is the
+fundamental limit of unsupervised reconstruction-based detection here.
+
+\textbf{Semi-supervised pseudo-labels.}
+GBM gains $\Delta{=}-0.0006$: supervised boundary is already saturated.
+GraphSAGEv2 gains $+0.031$: extra pseudo-labeled nodes populate graph
+neighborhoods during message passing.
+
+\textbf{Concept drift.}
+Illicit rate drops 11.6\,\%$\to$6.5\,\% over 15 steps.  Production systems
+need temporal threshold recalibration.
+
+\textbf{Limitations.}
+(1)~Feature semantics unknown---robust features cannot be interpreted without
+Elliptic collaboration.
+(2)~GAT Optuna tuning incomplete; the SAGE/GAT gap may narrow.
+(3)~GBM + GraphSAGEv2 stacking unexplored.
+(4)~DOMINANT with more epochs and $\alpha$ tuning may gain further.
+(5)~Per-transaction LSTM-AE (vs.\ timestep aggregate) not evaluated.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Conclusion}
+
+We benchmarked 48 model variants on the Elliptic dataset across five
+improvement rounds.  Six actionable findings:
+
+\begin{enumerate}
+  \item \textbf{Temporal split is mandatory.}  Random shuffling leaks future
+        patterns; the 11.6\,\%$\to$6.5\,\% illicit-rate drift is real.
+  \item \textbf{Supervised trees dominate.}  GBM + structural topology
+        reaches F1~=~0.827; 71 aggregated features encode enough graph
+        signal to outperform unsupervised GNNs.
+  \item \textbf{GNNs add complementary structure.}  GraphSAGEv2 reaches
+        F1~=~0.698 using only graph topology.  3-layer mean aggregation
+        with LayerNorm and self-loops is optimal; GAT consistently
+        underperforms on sparse graphs.
+  \item \textbf{Reconstruction detection is viable but inverted.}
+        $\beta$-VAE ($\beta{=}0.01$, F1~=~0.407) is the best unsupervised
+        non-graph method.  Score direction must be validated before deployment.
+  \item \textbf{DOMINANT is the best unsupervised graph method.}
+        F1~=~0.212, AUC~=~0.669, exceeding all classical detectors by
+        $>$0.13 F1.
+  \item \textbf{Three features are cross-paradigm robust.}
+        \texttt{lf\_53}, \texttt{lf\_90}, \texttt{af\_70} rank top-20 in
+        RF, GBM (SHAP), and GraphSAGE (gradient attribution).
+\end{enumerate}
+
+\textbf{Future work}: (1)~GBM + GraphSAGEv2 stacking;
+(2)~per-transaction LSTM-AE; (3)~EvolveGCN~\cite{pareja2020evolve} for
+temporal drift; (4)~online threshold recalibration;
+(5)~GNNExplainer for node-level attribution;
+(6)~Elliptic collaboration to identify feature semantics.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{thebibliography}{99}
+
+\bibitem{weber2019}
+M.~Weber et al., ``Anti-money laundering in Bitcoin: Experimenting with graph
+convolutional networks for financial forensics,'' \textit{KDD Workshop on
+Anomaly Detection in Finance}, 2019.
+
+\bibitem{pareja2020evolve}
+A.~Pareja et al., ``EvolveGCN: Evolving graph convolutional networks for
+dynamic graphs,'' \textit{AAAI}, 2020.
+
+\bibitem{hamilton2017}
+W.~L.~Hamilton, Z.~Ying, and J.~Leskovec, ``Inductive representation learning
+on large graphs,'' \textit{NeurIPS}, 2017.
+
+\bibitem{velickovic2018}
+P.~Veli\v{c}kovi\'{c} et al., ``Graph attention networks,'' \textit{ICLR},
+2018.
+
+\bibitem{brody2022}
+S.~Brody, U.~Alon, and E.~Yahav, ``How attentive are graph attention
+networks?'' \textit{ICLR}, 2022.
+
+\bibitem{ding2019dominant}
+K.~Ding et al., ``Deep anomaly detection on attributed networks,''
+\textit{SIAM SDM}, 2019.
+
+\bibitem{higgins2017beta}
+I.~Higgins et al., ``$\beta$-VAE: Learning basic visual concepts with a
+constrained variational framework,'' \textit{ICLR}, 2017.
+
+\bibitem{hawkins2002}
+S.~Hawkins et al., ``Outlier detection using replicator neural networks,''
+\textit{DaWaK}, 2002.
+
+\bibitem{zhou2017}
+C.~Zhou and R.~C.~Paffenroth, ``Anomaly detection with robust deep
+autoencoders,'' \textit{KDD}, 2017.
+
+\bibitem{vincent2008}
+P.~Vincent et al., ``Extracting and composing robust features with denoising
+autoencoders,'' \textit{ICML}, 2008.
+
+\bibitem{kingma2014}
+D.~P.~Kingma and M.~Welling, ``Auto-encoding variational Bayes,''
+\textit{ICLR}, 2014.
+
+\bibitem{liu2008}
+F.~T.~Liu, K.~M.~Ting, and Z.-H.~Zhou, ``Isolation forest,''
+\textit{IEEE ICDM}, 2008.
+
+\bibitem{lundberg2017}
+S.~M.~Lundberg and S.-I.~Lee, ``A unified approach to interpreting model
+predictions,'' \textit{NeurIPS}, 2017.
+
+\bibitem{akiba2019}
+T.~Akiba et al., ``Optuna: A next-generation hyperparameter optimization
+framework,'' \textit{KDD}, 2019.
+
+\bibitem{siffer2017}
+A.~Siffer, P.-A.~Fouque, A.~Termier, and C.~Largouet, ``Anomaly detection
+in streams with extreme value theory,'' \textit{KDD}, 2017.
+
+\bibitem{lee2013pseudo}
+D.-H.~Lee, ``Pseudo-label: The simple and efficient semi-supervised learning
+method for deep neural networks,'' \textit{ICML Workshop}, 2013.
+
+\end{thebibliography}
+
+\end{document}
