@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import f1_score
+from scipy.stats import genpareto
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -143,3 +144,23 @@ def f1_optimal_threshold(scores: np.ndarray, y_val: np.ndarray) -> float:
         if f > best_f1:
             best_f1, best_t = f, t
     return best_t
+
+
+def evt_threshold(scores: np.ndarray, tail_quantile: float = 0.90, exceedance_prob: float = 0.01) -> float:
+    """
+    Extreme Value Theory threshold via Generalised Pareto Distribution (GPD).
+    Fits GPD to the upper tail of `scores` above `tail_quantile`-percentile.
+    Returns threshold at which P(score > t | score > u) = exceedance_prob.
+
+    Course reference: Module 4, threshold selection §5.1(iii).
+    More principled than fixed-percentile for heavy-tailed reconstruction errors.
+    """
+    u = np.percentile(scores, 100 * tail_quantile)
+    exceedances = scores[scores > u] - u
+    if len(exceedances) < 10:
+        # Fallback to simple percentile if not enough tail samples
+        return np.percentile(scores, 100 * (1 - exceedance_prob))
+    c, loc, scale = genpareto.fit(exceedances, floc=0)
+    # P(X > t | X > u) = exceedance_prob  →  solve for t
+    t_above_u = genpareto.ppf(1.0 - exceedance_prob, c, loc=loc, scale=scale)
+    return u + t_above_u
