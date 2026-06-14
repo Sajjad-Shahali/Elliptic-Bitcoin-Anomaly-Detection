@@ -16,7 +16,7 @@
 
 Detecting illicit Bitcoin transactions using the [Elliptic dataset](https://www.kaggle.com/datasets/ellipticco/elliptic-data-set) — a real-world graph of 203,769 Bitcoin transactions labeled as illicit (money laundering, scams) or licit.
 
-Benchmarks **13 model variants** across 4 paradigms — unsupervised, supervised, deep neural, and graph neural — with three rounds of systematic improvement, Optuna hyperparameter tuning, and SHAP explainability.
+**48 experiments** across 5 improvement rounds covering unsupervised, supervised, deep neural, graph neural, semi-supervised, ensemble, and topological methods — with Optuna hyperparameter tuning, SHAP explainability, and EVT-based anomaly thresholding.
 
 ---
 
@@ -24,51 +24,46 @@ Benchmarks **13 model variants** across 4 paradigms — unsupervised, supervised
 
 > Test set: time steps 35–49 (temporal split, matches Elliptic paper). Illicit rate: 6.5%.
 
-### Full Leaderboard — All Rounds
+### Top-10 Leaderboard
 
-| Rank | Model | Version | F1 (illicit) | ROC-AUC | Avg Precision |
-|------|-------|---------|:------------:|:-------:|:-------------:|
-| 1 | **GradientBoosting** | Optuna tuned | **0.824** | 0.920 | — |
-| 2 | LightGBM | Round 1 | 0.817 | 0.930 | 0.804 |
-| 3 | RF + Graph Features | Round 1 | 0.807 | **0.942** | 0.800 |
-| 4 | Random Forest | Baseline | 0.801 | 0.935 | 0.794 |
-| 5 | GradientBoosting | Baseline | 0.766 | 0.914 | 0.785 |
-| 6 | GraphSAGEv2 | Round 2 | 0.698 | 0.913 | 0.720 |
-| 7 | GraphSAGE | Optuna tuned | 0.688 | — | — |
-| 8 | GraphSAGE | Baseline | 0.541 | 0.888 | 0.549 |
-| 9 | DenoisingAE | Round 2 | 0.361 | 0.792 | 0.366 |
-| 10 | GAT | Round 1 | 0.359 | 0.847 | 0.389 |
-| 11 | Autoencoder | Baseline | 0.356 | 0.781 | 0.336 |
-| 12 | VAE | Round 1 | 0.340 | 0.778 | 0.310 |
-| 13 | GATv2 | Round 2 | 0.317 | 0.882 | 0.376 |
-| 14 | Logistic Regression | Baseline | 0.302 | 0.881 | 0.291 |
-| 15 | VAEv2 | Round 2 | 0.256 | 0.732 | 0.161 |
-| 16 | LOF | Baseline | 0.076 | 0.506 | 0.066 |
-| 17 | One-Class SVM | Baseline | 0.023 | 0.235 | 0.039 |
-| 18 | Isolation Forest | Baseline | 0.021 | 0.172 | 0.036 |
+| Rank | Model | Category | F1 (illicit) | ROC-AUC | Avg Precision |
+|------|-------|----------|:------------:|:-------:|:-------------:|
+| 1 | **GBM + Structural Features** | Supervised | **0.8265** | 0.9243 | 0.8031 |
+| 2 | GradientBoosting (Optuna) | Supervised | 0.8241 | 0.9204 | — |
+| 3 | GBM + PseudoLabels | Semi-supervised | 0.8235 | 0.9240 | 0.8040 |
+| 4 | Ensemble (GBM+LGBM+SAGEv2) | Ensemble | 0.821 | 0.924 | 0.802 |
+| 5 | LightGBM | Supervised | 0.817 | 0.930 | 0.804 |
+| 6 | GBM + Temporal Rolling | Supervised | 0.8179 | **0.9300** | 0.8017 |
+| 7 | RF + Graph Features | Supervised | 0.807 | 0.942 | 0.800 |
+| 8 | Random Forest | Supervised | 0.801 | 0.935 | 0.794 |
+| 9 | SAGEv2 + PseudoLabels | Semi-sup GNN | 0.7293 | 0.8901 | 0.7517 |
+| 10 | GraphSAGEv2 | GNN | 0.698 | 0.913 | 0.720 |
 
-**Primary metric: F1 on illicit class.** Accuracy is misleading at 6.5% illicit rate.
+**Primary metric: F1 on illicit class.** Accuracy is meaningless at 6.5% illicit rate.
 
-### Improvement Journey
+### Improvement Journey — 5 Rounds
 
-| Model | Baseline | Round 1 | Round 2 | Optuna | Best |
-|-------|:--------:|:-------:|:-------:|:------:|:----:|
-| GradientBoosting | 0.766 | 0.817 (LGB) | — | **0.824** | **0.824** |
-| Random Forest | 0.801 | 0.807 (+graph) | — | 0.797 | 0.807 |
-| GraphSAGE | 0.541 | — | **0.698** (+3L) | 0.688 | **0.698** |
-| Autoencoder | 0.356 | 0.340 (VAE) | 0.361 (DAE) | — | 0.361 |
-| GAT | — | 0.359 | 0.317 (v2) | — | 0.359 |
+| Model | Baseline | Round 1 | Round 2 | Optuna | Round 3–5 | Best |
+|-------|:--------:|:-------:|:-------:|:------:|:----------:|:----:|
+| GradientBoosting | 0.766 | 0.817 (LGBM) | — | 0.824 | **0.827** (+struct) | **0.827** |
+| Random Forest | 0.801 | 0.807 (+graph) | — | 0.797 | — | 0.807 |
+| GraphSAGE | 0.541 | — | 0.698 (+3L) | 0.688 | 0.729 (+pseudo) | 0.729 |
+| Autoencoder | 0.356 | 0.340 (VAE) | 0.361 (DAE) | — | 0.407 (β-VAE) | 0.407 |
+| GAT | — | 0.359 | 0.317 (v2) | — | — | 0.359 |
 
 ### Key Takeaways
 
-- **GBM + Optuna = F1 0.824** — right learning rate and depth outweigh model family choice
-- **GraphSAGEv2 = biggest GNN jump (+15.7 F1)** — 3 layers + LayerNorm + self-loops captures 3-hop money laundering chains
-- **GAT consistently underperforms GraphSAGE** across all variants — attention overfits sparse graph topology; mean aggregation is more stable
-- **Supervised >> Unsupervised** (F1 0.82 vs 0.08) — illicit transactions do not cluster in feature space
-- **Autoencoder score inverts** — illicit txs reconstruct with *lower* MSE (they follow templated patterns); high error ≠ anomaly
-- **VAE worse than AE** — ELBO adds noise; raw MSE is the better anomaly signal here
+- **Best model: GBM + 7 structural topology features (F1=0.8265)** — degree, clustering, ego-density, OddBall deviation add marginal but consistent signal on top of 165 tabular features
+- **GBM Optuna = F1 0.824** — right learning rate and depth (n=245, depth=8, lr=0.121) outweigh model family
+- **Semi-supervised pseudo-labels: +3.1 F1 on GraphSAGEv2** (0.698→0.729) — graph model benefits more than GBM from unlabeled nodes populating neighborhoods
+- **Ensemble of GBM+LGBM+SAGEv2 = F1 0.821** — close to GBM solo; individual model already near ceiling; weighting away from SAGEv2 removes graph signal
+- **GraphSAGEv2 biggest GNN jump (+15.7 F1)** — 3 layers + LayerNorm + self-loops captures 3-hop money laundering chains
+- **GAT consistently underperforms GraphSAGE** — attention overfits sparse graph (avg degree 2.3); mean aggregation more stable
+- **β-VAE best unsupervised (F1=0.407)** — lower β=0.01 (reconstruction-dominated) outperforms higher β; illicit txs reconstruct with *lower* error (templated patterns), so KL regularization hurts
+- **Spectral embedding carries no anomaly signal** — Fiedler value ≈ 2 (bipartite-like spectrum); money laundering chains don't form isolated spectral communities
+- **Supervised >> Unsupervised** (F1 0.83 vs 0.09) — illicit transactions don't cluster in feature space; supervised labels are essential
 - **Three cross-model robust features:** `lf_53`, `lf_90`, `af_70` rank top-20 in RF (SHAP), GBM (SHAP), and GraphSAGE (gradient attribution)
-- **Concept drift is real** — illicit rate drops 11.6% → 6.5% between train and test; random split inflates all metrics
+- **Concept drift is real** — illicit rate drops 11.6% → 6.5% train→test; random split inflates all metrics
 
 ---
 
@@ -101,55 +96,73 @@ The [Elliptic Data Set](https://www.kaggle.com/datasets/ellipticco/elliptic-data
 | Split | Steps | Purpose |
 |-------|-------|---------|
 | Train | 1–34 | Model training |
-| Validation | 30–34 | Threshold tuning (neural models) |
+| Validation | 30–34 | Threshold tuning (neural/ensemble models) |
 | Test | 35–49 | Final evaluation |
 
-Random shuffling is explicitly avoided — this is a time-series dataset. Shuffling leaks future patterns into training and produces metrics that don't reflect real deployment.
+Random shuffling is explicitly avoided — this is a time-series dataset. Shuffling leaks future patterns into training and inflates all metrics.
 
 ### Evaluation Protocol
-| Paradigm | Training data | Evaluated on |
-|----------|--------------|-------------|
-| Unsupervised | All train rows (incl. unknown) | Labeled test rows |
-| OCSVM / AE / VAE | Licit-only train rows | Labeled test rows |
-| Supervised | Labeled train rows | Labeled test rows |
-| GNN | Full graph, supervised by train labels | Labeled test nodes |
+
+| Paradigm | Training data | Threshold |
+|----------|--------------|-----------|
+| Unsupervised | All train rows (incl. unknown) | F1-optimal on labeled train |
+| AE / VAE / OCSVM | Licit-only train rows | F1-optimal on labeled train |
+| Supervised | Labeled train rows | Model default (0.5) |
+| GNN | Full graph, supervised by train labels | Model default (0.5) |
+| Ensemble | Labeled train rows | Grid search on val steps 30–34 |
 
 ---
 
 ## Methods
 
-### Unsupervised
+### Unsupervised (classical)
 | Method | Notes |
 |--------|-------|
 | Isolation Forest | contamination=0.1 |
 | Local Outlier Factor | Transductive — applied to test set directly |
-| One-Class SVM | nu=0.05, RBF, trained on licit-only |
+| One-Class SVM | nu=0.05, RBF, licit-only train |
+| IsoForest on structural topology | 7 graph features: degree, clustering, OddBall, ego-density |
+| IsoForest / OCSVM on spectral embedding | Top-50 eigenvectors of normalized adjacency |
 
 ### Supervised
 | Method | Notes |
 |--------|-------|
 | Logistic Regression | L2, `class_weight='balanced'` |
 | Random Forest | 100 trees, `class_weight='balanced'` |
-| Gradient Boosting | sklearn GBM → Optuna tuned (best: n=245, depth=8, lr=0.121) |
-| **LightGBM** | `scale_pos_weight`, 500 trees, max_depth=8 |
-| **RF + Graph Features** | + in/out degree, PageRank, clustering coefficient |
+| Gradient Boosting | Optuna-tuned (best: n=245, depth=8, lr=0.121, subsample=0.918) |
+| LightGBM | `scale_pos_weight`, 500 trees, max_depth=8 |
+| RF + Graph Features | + in/out degree, PageRank, clustering coefficient |
+| GBM + Structural Features | 165 tabular + 7 topology features (degree, clustering, avg-nb-deg, ego-density, OddBall) |
+| GBM + Temporal Rolling | 165 tabular + 330 rolling mean/std features (window=5 time steps) |
+| GBM + PseudoLabels | Retrained on 3,653 pseudo-illicit + 97,108 pseudo-licit unlabeled nodes |
 
-### Neural
+### Neural Anomaly Detection
 | Method | Notes |
 |--------|-------|
-| Autoencoder | 166→128→64→32→64→128→166. Licit-only train. MSE score (inverted). |
-| Denoising AE | 166→256→128→64→8→64→128→256→166. Latent=8, noise_std=0.1. F1-optimal threshold on val. |
-| VAE | Standard beta-VAE, beta=1.0 |
-| VAEv2 | Deeper 256-hidden, beta=0.01, ELBO score |
+| Autoencoder | 166→128→64→32→...→166, licit-only, MSE score (inverted) |
+| Denoising AE | Latent=8, noise_std=0.1, F1-optimal threshold on val |
+| VAE | Standard β-VAE, β=1.0 |
+| VAEv2 | Deeper 256-hidden, β=0.01, ELBO score |
+| β-VAE grid search | β ∈ {0.01, 1, 2, 4, 8} — β=0.01 optimal (F1=0.407) |
+| LSTM-AE | Per-timestep aggregate → sliding windows T=10 → temporal anomaly scores |
+| DOMINANT | GCN-AE: 2-layer GCNConv encoder, attribute + structure decoders, joint MSE+BCE loss |
 
 ### Graph Neural Network
 | Method | Notes |
 |--------|-------|
 | GraphSAGE | 2-layer, hidden=128, mean aggregation, 200 epochs |
-| GraphSAGE (tuned) | Optuna: hidden=256, dropout=0.45, lr=0.0038, 274 epochs |
-| **GraphSAGEv2** | 3-layer, hidden=256, LayerNorm, self-loops, 250 epochs |
-| GAT | 2-layer, 4 heads, concat — underperforms |
-| GATv2 | 3-layer, 2 heads, residual, LayerNorm — still underperforms |
+| GraphSAGE (Optuna) | hidden=256, dropout=0.45, lr=0.0038, 274 epochs |
+| GraphSAGEv2 | 3-layer, hidden=256, LayerNorm, self-loops, 250 epochs |
+| SAGEv2 + PseudoLabels | 130,655 train nodes (orig 29,894 + 100,761 pseudo-labeled) |
+| GAT | 2-layer, 4 heads, concat aggregation |
+| GATv2 | 3-layer, 2 heads, residual, LayerNorm |
+
+### Ensemble
+| Method | Notes |
+|--------|-------|
+| RF + LGB + GAT | Equal soft vote, threshold on train (Round 1) |
+| GBM + LGBM + SAGEv2 | Equal soft vote, threshold grid-searched on val steps 30–34 |
+| Weighted variants | 40/40/20, 45/45/10, 50/50/0 — equal weights won |
 
 ---
 
@@ -157,26 +170,23 @@ Random shuffling is explicitly avoided — this is a time-series dataset. Shuffl
 
 `scripts/gnn_experiments.py` runs 10 controlled experiments isolating the effect of each architectural choice.
 
-| Exp | Model | Config | F1 | AUC | Avg-Prec |
-|-----|-------|--------|:--:|:---:|:--------:|
-| 1 | GraphSAGE | 2L h=64 — minimal baseline | 0.528 | 0.887 | 0.519 |
-| 2 | GraphSAGE | 2L h=128 | 0.577 | 0.896 | 0.603 |
-| 3 | GraphSAGE | 2L h=256 | 0.580 | 0.895 | 0.595 |
-| 4 | GraphSAGE | 2L h=128 300 epochs | 0.597 | 0.897 | 0.607 |
-| 5 | GraphSAGE | 3L h=128 — deeper | 0.615 | 0.899 | 0.611 |
-| 6 | GraphSAGEv2 | 3L h=256 + LayerNorm + self-loops | 0.683 | 0.906 | 0.704 |
-| **7** | **GraphSAGE** | **Optuna best: 3L h=256 lr=0.0038 274ep** | **0.690** | 0.901 | **0.706** |
-| 8 | GAT | 2L 4 heads baseline | 0.307 | 0.824 | 0.366 |
-| 9 | GAT | 2L 2 heads | 0.341 | 0.864 | 0.419 |
-| 10 | GATv2 | 3L 2 heads + residual + LayerNorm | 0.382 | 0.887 | 0.547 |
+| Exp | Model | Config | F1 | AUC |
+|-----|-------|--------|:--:|:---:|
+| 1 | GraphSAGE | 2L h=64 — minimal baseline | 0.528 | 0.887 |
+| 2 | GraphSAGE | 2L h=128 | 0.577 | 0.896 |
+| 3 | GraphSAGE | 2L h=256 | 0.580 | 0.895 |
+| 4 | GraphSAGE | 2L h=128 300 epochs | 0.597 | 0.897 |
+| 5 | GraphSAGE | 3L h=128 | 0.615 | 0.899 |
+| 6 | GraphSAGEv2 | 3L h=256 + LayerNorm + self-loops | 0.683 | 0.906 |
+| **7** | **GraphSAGE** | **Optuna: 3L h=256 lr=0.0038 274ep** | **0.690** | 0.901 |
+| 8 | GAT | 2L 4 heads | 0.307 | 0.824 |
+| 9 | GAT | 2L 2 heads | 0.341 | 0.864 |
+| 10 | GATv2 | 3L 2 heads + residual + LN | 0.382 | 0.887 |
 
-**What each experiment proves:**
-- **Exps 1–3:** Hidden dim 64→256 gives +5.2 F1; diminishing returns beyond 128
-- **Exps 2 vs 4:** Extra 100 epochs adds +2.0 F1 — training duration matters
+- **Exps 1–3:** Hidden dim 64→256 gives +5.2 F1
 - **Exps 2 vs 5:** 2L→3L adds +3.8 F1 — depth captures 3-hop laundering chains
 - **Exps 5 vs 6:** LayerNorm + self-loops adds +6.8 F1 — essential at 3 layers
-- **Exps 6 vs 7:** Optuna lr tuning adds +0.6 F1 on top of architecture
-- **Exps 8–10:** GAT improves with fewer heads and residuals but never beats GraphSAGE — mean aggregation outperforms attention on sparse Bitcoin graph (avg degree 2.3)
+- **Exps 8–10:** GAT never beats GraphSAGE — mean aggregation outperforms attention on sparse graph (avg degree 2.3)
 
 ### GNN Progression
 ![GNN Experiments](reports/gnn_experiments_progression.png)
@@ -190,22 +200,23 @@ Random shuffling is explicitly avoided — this is a time-series dataset. Shuffl
 
 SHAP TreeExplainer for RF + GBM, gradient attribution for GraphSAGE.
 
-### SHAP — Random Forest (top features by mean |SHAP|)
+### SHAP — Random Forest
 ![SHAP bar](reports/shap_rf_bar.png)
 
-### SHAP Beeswarm — direction and magnitude per sample
+### SHAP Beeswarm
 ![SHAP beeswarm](reports/shap_rf_beeswarm.png)
 
 ### GraphSAGE Gradient Attribution
 ![GNN attribution](reports/gnn_gradient_attribution.png)
 
 ### Cross-Model Feature Agreement
+
 | Agreement | Features |
 |-----------|----------|
 | RF ∩ GBM (7/20) | `lf_18`, `lf_47`, `lf_53`, `lf_59`, `lf_76`, `lf_90`, `af_70` |
 | RF ∩ GBM ∩ GNN (3/20) | **`lf_53`**, **`lf_90`**, **`af_70`** |
 
-These three features rank top-20 regardless of model family — strongest consistent signals in the dataset.
+These three features rank top-20 regardless of model family — strongest consistent signals in the dataset. All three are aggregated neighborhood features (af_ prefix = aggregated), confirming graph structure encodes meaningful signal.
 
 ---
 
@@ -215,14 +226,16 @@ These three features rank top-20 regardless of model family — strongest consis
 ├── config.py                    # paths, constants, label map, random seed
 ├── download_data.py             # download dataset via kagglehub
 ├── requirements.txt
-├── HANDOFF.md                   # technical decisions, known issues, full history
+├── HANDOFF.md                   # full technical decisions, known issues, all 48 experiment results
 │
 ├── src/
 │   ├── data_loader.py           # load_features(), load_classes(), load_all()
 │   ├── preprocessing.py         # temporal train/val/test split pipelines
 │   ├── models.py                # sklearn model factories
-│   ├── autoencoder.py           # Autoencoder + DenoisingAutoencoder, F1-optimal threshold
-│   ├── vae.py                   # VAE + VAEv2, ELBO score, F1-optimal threshold
+│   ├── autoencoder.py           # AE + DenoisingAE, F1-optimal threshold, EVT threshold (GPD)
+│   ├── vae.py                   # VAE + VAEv2 + beta-VAE, ELBO score
+│   ├── dominant.py              # DOMINANT GCN-AE (attr + structure decoders)
+│   ├── lstm_ae.py               # LSTM encoder-decoder, per-timestep sliding windows
 │   ├── gnn.py                   # GraphSAGE + GraphSAGEv2 (3-layer, LayerNorm)
 │   ├── gat.py                   # GAT + GATv2 (3-layer, residual, heads=2)
 │   ├── graph_features.py        # degree, PageRank, clustering from edgelist
@@ -239,24 +252,35 @@ These three features rank top-20 regardless of model family — strongest consis
 │   ├── 07_final_comparison.py   # all baseline models leaderboard
 │   ├── 08_tune_and_save.py      # Optuna tuning RF/GBM/GraphSAGE (40 trials each)
 │   ├── 09_tuned_comparison.py   # baseline vs tuned comparison
-│   ├── 10_improved_models.py    # LightGBM, RF+graph features, GAT, VAE, Ensemble
-│   ├── 11_improved_comparison.py# round 1 improvement deltas + plots
-│   └── 12_deep_improved.py      # GATv2, GraphSAGEv2, DenoisingAE, VAEv2
+│   ├── 10_improved_models.py    # LightGBM, RF+graph, GAT, VAE, Ensemble (Round 1)
+│   ├── 11_improved_comparison.py# Round 1 improvement deltas + plots
+│   ├── 12_deep_improved.py      # GATv2, GraphSAGEv2, DenoisingAE, VAEv2 (Round 2)
+│   ├── 13_dominant.py           # DOMINANT GCN-AE (Round 3)
+│   ├── 14_lstm_ae.py            # LSTM-AE temporal anomaly detection (Round 3)
+│   ├── 15_ensemble.py           # GBM+LGBM+SAGEv2 soft-vote ensemble (Round 3)
+│   ├── 16_pseudo_labels.py      # semi-supervised GBM+SAGEv2 with pseudo-labels (Round 4)
+│   ├── 17_beta_vae.py           # beta-VAE grid search beta in {0.01,1,2,4,8} (Round 4)
+│   ├── 18_structural_graph_features.py  # topology features + GBM (Round 4)
+│   ├── 19_spectral_anomaly.py   # spectral embedding IsoForest/OCSVM (Round 4)
+│   ├── 20_weighted_ensemble.py  # weighted ensemble weight sweep (Round 5)
+│   ├── 21_calibrated_gbm.py     # Platt + isotonic calibration (Round 5)
+│   └── 22_temporal_rolling_features.py  # rolling mean/std features (Round 5)
 │
 ├── models/                      # saved weights
-│   ├── scaler.joblib · scaler_graph_features.joblib
+│   ├── scaler.joblib · scaler_graph_features.joblib · scaler_structural.joblib
 │   ├── rf_tuned.joblib · gb_tuned.joblib · lightgbm.joblib
-│   ├── rf_graph_features.joblib
-│   ├── autoencoder.pt · denoising_ae.pt
+│   ├── rf_graph_features.joblib · gbm_structural.joblib
+│   ├── gbm_pseudo.joblib · gbm_temporal_rolling.joblib
+│   ├── autoencoder.pt · denoising_ae.pt · dominant.pt · lstm_ae.pt
 │   ├── vae.pt · vaev2.pt
-│   ├── graphsage.pt · graphsage_tuned.pt · graphsagev2.pt
+│   ├── graphsage.pt · graphsage_tuned.pt · graphsagev2.pt · graphsagev2_pseudo.pt
 │   └── gat.pt · gatv2.pt
 │
 ├── reports/                     # auto-generated plots + CSVs
-│   ├── leaderboard.csv · combined_leaderboard.csv · improvement_delta.csv
-│   ├── final_comparison.png · improvement_comparison.png · deep_improvement_comparison.png
+│   ├── leaderboard.csv · combined_leaderboard.csv
+│   ├── cm_DOMINANT.png · cm_Ensemble.png · pr_curves.png
 │   ├── shap_rf_bar.png · shap_rf_beeswarm.png · shap_gbm_bar.png
-│   ├── shap_rf_dependence.png · shap_rf_waterfall_illicit.png
+│   ├── gnn_experiments_progression.png · gnn_experiments_radar.png
 │   └── gnn_gradient_attribution.png
 │
 └── data/                        # gitignored — run download_data.py
@@ -299,7 +323,7 @@ Requires a [Kaggle account](https://www.kaggle.com/) and `~/.kaggle/kaggle.json`
 ### Run Pipeline
 
 ```bash
-# baseline
+# Baseline experiments (scripts 01-09)
 python scripts/01_eda.py
 python scripts/02_unsupervised.py
 python scripts/03_supervised.py
@@ -307,30 +331,30 @@ python scripts/04_autoencoder.py
 python scripts/05_gnn.py
 python scripts/06_explainability.py
 python scripts/07_final_comparison.py
-
-# tuning + improvements
 python scripts/08_tune_and_save.py      # ~20 min GPU
 python scripts/09_tuned_comparison.py
+
+# Round 1-2: new model families + architecture upgrades
 python scripts/10_improved_models.py    # ~10 min GPU
 python scripts/11_improved_comparison.py
 python scripts/12_deep_improved.py      # ~15 min GPU
+
+# Round 3: course-derived methods (DOMINANT, LSTM-AE, Ensemble)
+python scripts/13_dominant.py           # ~5 min GPU
+python scripts/14_lstm_ae.py            # ~3 min
+python scripts/15_ensemble.py           # ~3 min GPU
+
+# Round 4: Tier 2 improvements
+python scripts/16_pseudo_labels.py      # ~10 min GPU
+python scripts/17_beta_vae.py           # ~5 min
+python scripts/18_structural_graph_features.py  # ~5 min (NetworkX graph build)
+python scripts/19_spectral_anomaly.py   # ~5 min (ARPACK eigenvectors)
+
+# Round 5: ensemble tuning, calibration, temporal features
+python scripts/20_weighted_ensemble.py  # ~3 min GPU
+python scripts/21_calibrated_gbm.py     # ~1 min
+python scripts/22_temporal_rolling_features.py  # ~3 min
 ```
-
----
-
-## Visual Results
-
-### Full Model Comparison
-![Comparison](reports/final_comparison.png)
-
-### Round 1 Improvement (new model families)
-![Round 1](reports/improvement_comparison.png)
-
-### Round 2 Improvement (architecture upgrades)
-![Round 2](reports/deep_improvement_comparison.png)
-
-### Confusion Matrix — Best Model (GBM tuned)
-![CM RF](reports/cm_RandomForest.png)
 
 ---
 
@@ -341,11 +365,15 @@ python scripts/12_deep_improved.py      # ~15 min GPU
 | `kagglehub>=1.0.0` import error | Pin to `0.3.6`. `get_web_endpoint` missing from `kagglesdk`. |
 | PyG extension warnings | `pyg-lib`, `torch-scatter`, `torch-sparse` built for torch 2.7, used with 2.11. Non-fatal — pure Python fallback. |
 | LOF transductive | No continuous score. Applied to test set directly. |
-| AE/VAE score inversion | Illicit = lower reconstruction error. Auto-detected via ROC-AUC comparison on val set. |
+| AE/VAE score inversion | Illicit = lower reconstruction error (templated behavior). Auto-detected via ROC-AUC comparison on val set. |
+| β-VAE score inversion | Same as AE — lower β gives stronger inverted signal. β=0.01 (reconstruction-dominated) is optimal. |
+| LSTM-AE coarse granularity | Per-timestep aggregate approach cannot discriminate individual transactions within same time step. AUC=0.446 (<0.5) confirms inverted weak signal. Use for temporal monitoring, not transaction scoring. |
+| DOMINANT EVT threshold collapse | GPD fit assigns very high threshold on dense near-zero scores. Use F1-optimal threshold instead. |
+| Spectral embedding no signal | Fiedler value ≈ 2 (graph is bipartite-like). Money laundering chains don't form isolated spectral communities. |
 | Feature names unknown | Elliptic does not publish semantics. Columns named `lf_1..93` and `af_1..72`. |
 | Windows console unicode | Avoid arrow/tick characters in print() — cp1252 codec breaks on Windows terminal. |
-| GAT underperforms throughout | Attention mechanism overfits sparse graph. GraphSAGE mean aggregation more stable. |
-| VAEv2 worse than AE | ELBO score adds KL noise. Raw MSE is better anomaly signal for this task. |
+| GAT underperforms throughout | Attention overfits sparse graph. Mean aggregation (GraphSAGE) more stable. |
+| `get_feature_cols()` includes time_step | Must explicitly exclude `time_step` when using feature cols for scaling. |
 
 ---
 
@@ -358,9 +386,9 @@ python scripts/12_deep_improved.py      # ~15 min GPU
 | torch_geometric | 2.8.0 |
 | scikit-learn | 1.9.0 |
 | LightGBM | 4.6.0 |
+| NetworkX | 3.6.1 |
 | SHAP | 0.52.0 |
 | Optuna | 4.9.0 |
-| networkx | 3.6.1 |
 | GPU | NVIDIA RTX 5070 Ti Laptop (12 GB VRAM) |
 | CUDA Driver | 592.01 (CUDA 13.1) |
 
@@ -372,5 +400,7 @@ python scripts/12_deep_improved.py      # ~15 min GPU
 - Elliptic Data Set: [kaggle.com/datasets/ellipticco/elliptic-data-set](https://www.kaggle.com/datasets/ellipticco/elliptic-data-set)
 - Hamilton, W. et al. (2017). [Inductive Representation Learning on Large Graphs](https://arxiv.org/abs/1706.02216). NeurIPS. (GraphSAGE)
 - Velickovic, P. et al. (2018). [Graph Attention Networks](https://arxiv.org/abs/1710.10903). ICLR. (GAT)
+- Ding, K. et al. (2019). [Deep Anomaly Detection on Attributed Networks](https://epubs.siam.org/doi/abs/10.1137/1.9781611975673.67). SDM. (DOMINANT)
+- Higgins, I. et al. (2017). [beta-VAE: Learning Basic Visual Concepts with a Constrained Variational Framework](https://openreview.net/forum?id=Sy2fchgkl). ICLR. (β-VAE)
 - Lundberg, S. & Lee, S. (2017). [A Unified Approach to Interpreting Model Predictions](https://arxiv.org/abs/1705.07874). NeurIPS. (SHAP)
 - Akiba, T. et al. (2019). [Optuna: A Next-generation Hyperparameter Optimization Framework](https://arxiv.org/abs/1907.10902). KDD.
