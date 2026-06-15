@@ -72,7 +72,8 @@ train_rate = per_step[per_step["time_step"] <= 34]["rate"].mean() * 100
 test_rate  = per_step[per_step["time_step"] >  34]["rate"].mean() * 100
 
 y_max = per_step["rate"].max() * 100
-text_y = y_max * 0.92   # near top of chart
+text_y_train = y_max * 0.92   # train label: near top of left zone (no legend conflict)
+text_y_test  = y_max * 0.62   # test label: ~1.5 cm lower — clears the top-right legend
 
 ax.axhline(train_rate, xmin=0,    xmax=34.5/49, color="#2980b9",
            lw=1.2, ls=":", alpha=0.7)
@@ -80,13 +81,13 @@ ax.axhline(test_rate,  xmin=34.5/49, xmax=1.0,  color="#e67e22",
            lw=1.2, ls=":", alpha=0.7)
 
 ax.annotate(f"Train avg\n{train_rate:.1f}%",
-            xy=(17, train_rate), xytext=(17, text_y),
+            xy=(17, train_rate), xytext=(17, text_y_train),
             fontsize=9, fontweight="bold", color="#2980b9",
             ha="center", va="top",
             arrowprops=dict(arrowstyle="-", color="#2980b9",
                             lw=1.0, linestyle="dotted"))
 ax.annotate(f"Test avg\n{test_rate:.1f}%",
-            xy=(42, test_rate), xytext=(42, text_y),
+            xy=(42, test_rate), xytext=(42, text_y_test),
             fontsize=9, fontweight="bold", color="#e67e22",
             ha="center", va="top",
             arrowprops=dict(arrowstyle="-", color="#e67e22",
@@ -122,7 +123,7 @@ ax2.plot(betas, aucs, "s--", color="#3498db", lw=1.5, ms=6, label="ROC-AUC")
 best_idx = f1s.index(max(f1s))
 ax1.annotate(f"β={betas[best_idx]}\nF1={f1s[best_idx]:.3f}",
              xy=(betas[best_idx], f1s[best_idx]),
-             xytext=(0.15, 0.36), fontsize=8, color="#c0392b",
+             xytext=(0.04, 0.36), fontsize=8, color="#c0392b",
              arrowprops=dict(arrowstyle="->", color="#c0392b", lw=1))
 
 ax1.set_xlabel("β (KL weight in β-VAE ELBO)")
