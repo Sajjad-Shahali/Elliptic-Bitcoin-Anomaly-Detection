@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elliptic Bitcoin Anomaly Detection</title>
+<style>
+  /* ── Palette: deep navy / slate / teal ────────────────────────────── */
+  :root {
+    --bg:       #04090f;
+    --shell:    #080f1c;
+    --surface:  #0c1929;
+    --surface2: #0f2035;
+    --surface3: #142840;
+    --accent:   #64ffda;
+    --accent2:  #a8b2d8;
+    --green:    #52d68a;
+    --red:      #e06c75;
+    --gold:     #e5c07b;
+    --purple:   #c792ea;
+    --text:     #ccd6f6;
+    --muted:    #8892b0;
+    --border:   #172d4a;
+    --border2:  #1e3a5f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; overflow: hidden;
+    color: var(--text);
+  }
+
+  /* ── 90 % shell ──────────────────────────────────────────────────── */
+  .shell {
+    width: 90vw; height: 90vh;
+    background: var(--shell);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 0 80px rgba(100,255,218,0.05), 0 32px 100px rgba(0,0,0,0.7);
+  }
+
+  /* ── Top chrome ──────────────────────────────────────────────────── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 24px; border-bottom: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0;
+  }
+  .topbar-label { font-size: 0.7rem; letter-spacing: 1.8px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .dots { display: flex; gap: 7px; align-items: center; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border2); cursor: pointer; transition: all .25s; }
+  .dot.active { background: var(--accent); width: 22px; border-radius: 3px; }
+  .slide-num { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* ── Slide area ──────────────────────────────────────────────────── */
+  .slides-area { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 30px 48px 18px;
+    opacity: 0; pointer-events: none;
+    transform: translateX(50px);
+    transition: opacity .38s ease, transform .38s ease;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .slide::-webkit-scrollbar { width: 5px; }
+  .slide::-webkit-scrollbar-track { background: transparent; }
+  .slide::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  .slide::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+  .slide.active { opacity: 1; pointer-events: all; transform: translateX(0); }
+  .slide.exit   { opacity: 0; transform: translateX(-50px); }
+
+  /* ── Bottom chrome ───────────────────────────────────────────────── */
+  .bottombar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 22px; border-top: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0; gap: 16px;
+  }
+  .nav-btn {
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); padding: 5px 18px; border-radius: 6px;
+    cursor: pointer; font-size: 0.78rem; font-family: inherit; transition: all .18s;
+  }
+  .nav-btn:hover { background: var(--surface3); border-color: var(--accent); color: var(--accent); }
+  .progress-bar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #52d68a); border-radius: 2px; transition: width .38s ease; }
+  .notes-btn {
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--muted); padding: 5px 14px; border-radius: 6px;
+    cursor: pointer; font-size: 0.75rem; font-family: inherit; transition: all .18s;
+  }
+  .notes-btn:hover, .notes-btn.on { color: var(--accent); border-color: var(--accent); background: rgba(100,255,218,0.06); }
+
+  /* ── Notes strip ─────────────────────────────────────────────────── */
+  .notes-strip {
+    flex-shrink: 0; border-top: 1px solid var(--border);
+    background: var(--surface); overflow: hidden;
+    max-height: 0; transition: max-height .3s ease, padding .3s ease;
+  }
+  .notes-strip.open { max-height: 110px; padding: 10px 24px; }
+  .notes-lbl { font-size: 0.62rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 5px; }
+  .notes-body { font-size: 0.8rem; color: var(--muted); line-height: 1.65; }
+
+  /* ── Typography ──────────────────────────────────────────────────── */
+  h1 { font-size: 2.6rem; font-weight: 800; line-height: 1.1; }
+  h2 { font-size: 1.7rem; font-weight: 700; margin-bottom: 18px; letter-spacing: -.3px; }
+  h3 { font-size: 0.8rem; font-weight: 700; color: var(--accent); margin-bottom: 10px; letter-spacing: .8px; text-transform: uppercase; }
+  p  { font-size: 0.85rem; line-height: 1.65; color: var(--muted); }
+  code { font-family: 'Cascadia Code', monospace; font-size: 0.85em; background: var(--surface3); padding: 1px 5px; border-radius: 3px; }
+
+  .accent  { color: var(--accent);  }
+  .blue    { color: var(--accent2); }
+  .green   { color: var(--green);   }
+  .red     { color: var(--red);     }
+  .purple  { color: var(--purple);  }
+  .gold    { color: var(--gold);    }
+
+  /* ── Layout ──────────────────────────────────────────────────────── */
+  .row { display: flex; gap: 16px; width: 100%; }
+  .col { display: flex; flex-direction: column; gap: 12px; flex: 1; }
+
+  /* ── Cards ───────────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .card.ca  { border-color: rgba(100,255,218,.3);  }
+  .card.cg  { border-color: rgba(82,214,138,.3);   }
+  .card.cb  { border-color: rgba(168,178,216,.3);  }
+  .card.cr  { border-color: rgba(224,108,117,.3);  }
+  .card.cp  { border-color: rgba(199,146,234,.3);  }
+  .card.cgo { border-color: rgba(229,192,123,.3);  }
+
+  /* ── Stat ────────────────────────────────────────────────────────── */
+  .stat { text-align: center; }
+  .stat .num { font-size: 2.2rem; font-weight: 800; line-height: 1; }
+  .stat .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 5px; line-height: 1.3; }
+
+  /* ── Badge ───────────────────────────────────────────────────────── */
+  .badge { display: inline-block; padding: 3px 11px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; letter-spacing: .4px; }
+  .ba  { background: rgba(100,255,218,.1); color: var(--accent);  }
+  .bb  { background: rgba(168,178,216,.1); color: var(--accent2); }
+  .bg  { background: rgba(82,214,138,.1);  color: var(--green);   }
+  .br  { background: rgba(224,108,117,.1); color: var(--red);     }
+  .bp  { background: rgba(199,146,234,.1); color: var(--purple);  }
+  .bgo { background: rgba(229,192,123,.1); color: var(--gold);    }
+
+  /* ── Table ───────────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th { background: var(--surface); padding: 7px 12px; text-align: left; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); border-bottom: 1px solid var(--border); }
+  td { padding: 7px 12px; border-bottom: 1px solid rgba(23,45,74,.6); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.hl  td { background: rgba(100,255,218,.05); }
+  tr.hl2 td { background: rgba(168,178,216,.05); }
+
+  /* ── Bars ────────────────────────────────────────────────────────── */
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .bar-lbl { font-size: 0.77rem; width: 128px; color: var(--muted); flex-shrink: 0; }
+  .bar-trk { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .bar-fil { height: 100%; border-radius: 3px; }
+  .bar-val { font-size: 0.77rem; font-weight: 700; width: 48px; text-align: right; flex-shrink: 0; }
+
+  /* ── Icon list ───────────────────────────────────────────────────── */
+  .il { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .il li { display: flex; align-items: flex-start; gap: 10px; font-size: 0.82rem; color: var(--muted); }
+  .il .ico { font-size: 0.95rem; flex-shrink: 0; margin-top: 1px; }
+  .il strong { color: var(--text); }
+
+  /* ── Image frame ─────────────────────────────────────────────────── */
+  .img-f {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .img-f img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .img-cap { font-size: 0.67rem; color: var(--muted); text-align: center; margin-top: 5px; letter-spacing: .2px; }
+
+  /* ── Insight / warn box ──────────────────────────────────────────── */
+  .ins  { background: rgba(100,255,218,.05); border: 1px solid rgba(100,255,218,.2);  border-radius: 10px; padding: 12px 16px; font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+  .ins  strong { color: var(--accent); }
+  .warn { background: rgba(224,108,117,.05); border-color: rgba(224,108,117,.25); }
+  .warn strong { color: var(--red); }
+  .gold-box { background: rgba(229,192,123,.05); border-color: rgba(229,192,123,.25); }
+  .gold-box strong { color: var(--gold); }
+
+  /* ── Timeline strip ──────────────────────────────────────────────── */
+  .tstrip { display: flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); height: 58px; }
+  .ts { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 12px; }
+  .ts .tl { font-size: 0.72rem; font-weight: 700; }
+  .ts .td { font-size: 0.62rem; color: var(--muted); margin-top: 2px; }
+
+  /* ── Method grid ─────────────────────────────────────────────────── */
+  .mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+  .mc { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .mc .mn { font-weight: 700; font-size: 0.88rem; margin-bottom: 5px; color: var(--text); }
+  .mc .md { font-size: 0.76rem; color: var(--muted); line-height: 1.5; }
+  .mc .mf { font-size: 0.75rem; font-weight: 700; margin-top: 8px; }
+
+  /* ── Flow pipe ───────────────────────────────────────────────────── */
+  .pipe { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface2); }
+  .pipe-step { flex: 1; padding: 12px 8px; text-align: center; border-right: 1px solid var(--border); }
+  .pipe-step:last-child { border-right: none; }
+  .pipe-step .pi { font-size: 1.3rem; }
+  .pipe-step .pt { font-size: 0.7rem; font-weight: 700; margin-top: 4px; }
+  .pipe-step .pd { font-size: 0.62rem; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+  .pipe-arrow { display: flex; align-items: center; padding: 0 4px; color: var(--border2); font-size: 0.75rem; }
+
+  /* ── Pills ───────────────────────────────────────────────────────── */
+  .pill { display: inline-block; padding: 4px 13px; border-radius: 4px; font-size: 0.73rem; font-weight: 600; border: 1px solid; letter-spacing: .2px; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* ── Divider ─────────────────────────────────────────────────────── */
+  .divider { width: 44px; height: 2px; border-radius: 1px; background: var(--accent); margin: 10px 0; }
+
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-size: 0.75rem; color: var(--text); line-height: 1.7; overflow: auto; }
+  kbd { background: var(--surface2); border: 1px solid var(--border2); padding: 1px 7px; border-radius: 4px; font-size: 0.74rem; font-family: monospace; color: var(--muted); }
+
+  /* ── Slide 0 hero ────────────────────────────────────────────────── */
+  #s0 { align-items: center; justify-content: center; background: radial-gradient(ellipse at 55% 35%, rgba(100,255,218,.04) 0%, transparent 65%); }
+  #s0 h1 { background: linear-gradient(130deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- TOP CHROME -->
+  <div class="topbar">
+    <span class="topbar-label">Elliptic Bitcoin · Graph-Aware Anomaly Detection · Politecnico di Torino</span>
+    <div class="dots" id="dots"></div>
+    <span class="slide-num" id="counter">1 / 14</span>
+  </div>
+
+  <!-- ═══ SLIDES ═══════════════════════════════════════════════════════ -->
+  <div class="slides-area" id="slides">
+
+    <!-- S0 TITLE ─────────────────────────────────────────────────────── -->
+    <div class="slide active" id="s0"
+         data-notes="Introduce yourself: Sajjad Shahali, DAUIN Politecnico di Torino. Project: 48 experiments across 5 AI paradigms on real blockchain data to detect money laundering. Anchor number: best F1 = 0.8265 on the held-out test set.">
+      <div style="max-width:720px; text-align:center;">
+        <div style="font-size:3rem; margin-bottom:14px; letter-spacing:-2px;">₿ ⟶ 🔍</div>
+        <h1>Graph-Aware Anomaly Detection<br>for Blockchain Forensics</h1>
+        <div class="divider" style="margin:16px auto;"></div>
+        <p style="font-size:1rem; color:var(--text); margin-bottom:6px;">
+          A <span class="accent">48-Experiment Benchmark</span> on the Elliptic Bitcoin Dataset
+        </p>
+        <p style="font-size:0.82rem; margin-bottom:24px;">Sajjad Shahali Ramsheh · DAUIN · Politecnico di Torino · s340464</p>
+        <div class="pill-row" style="justify-content:center;">
+          <span class="pill" style="color:var(--accent);border-color:rgba(100,255,218,.4);">48 Experiments</span>
+          <span class="pill" style="color:var(--accent2);border-color:rgba(168,178,216,.4);">5 AI Paradigms</span>
+          <span class="pill" style="color:var(--green);border-color:rgba(82,214,138,.4);">203,769 Transactions</span>
+          <span class="pill" style="color:var(--gold);border-color:rgba(229,192,123,.4);">Best F1 = 0.8265</span>
+        </div>
+        <p style="margin-top:34px; font-size:0.72rem; color:var(--border2);">
+          <kbd>←</kbd> <kbd>→</kbd> to navigate &nbsp;·&nbsp; <kbd>N</kbd> speaker notes
+        </p>
+      </div>
+    </div>
+
+    <!-- S1 PROBLEM ───────────────────────────────────────────────────── -->
+    <div class="slide" id="s1"
+         data-notes="Bitcoin is public but nobody knows who owns each address. Globally ~$2 trillion is laundered each year and blockchain has become a preferred tool. Traditional bank AML needs verified identity — useless on blockchain. We must infer criminal intent from transaction patterns and the graph of who-sends-to-whom. The Elliptic dataset contains real identified illicit wallets from court cases, making it uniquely reliable ground truth.">
+      <h2>The Problem: <span class="accent">Detecting Illicit Bitcoin</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col">
+          <div class="card">
+            <h3>Why Bitcoin is Attractive for Crime</h3>
+            <ul class="il">
+              <li><span class="ico">🔗</span><strong>Pseudonymous</strong> — wallet addresses expose no real identity; anyone can create unlimited wallets</li>
+              <li><span class="ico">🌐</span><strong>Borderless</strong> — funds move globally in minutes, bypassing banking jurisdiction</li>
+              <li><span class="ico">♾️</span><strong>Irreversible</strong> — confirmed transactions cannot be clawed back by authorities</li>
+              <li><span class="ico">💸</span>Used for <strong>ransomware, darknet markets, mixing/tumbling services, ponzi schemes</strong></li>
+            </ul>
+          </div>
+          <div class="card ca">
+            <h3>Goal</h3>
+            <p style="color:var(--text); font-size:0.88rem; line-height:1.7;">
+              Classify each Bitcoin transaction as <span class="red"><strong>illicit</strong></span> (money laundering, scam, ransomware)
+              or <span class="green"><strong>licit</strong></span> (exchange, service, legitimate transfer) — using only
+              165 anonymous node features and the graph of transactions.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Scale of the Problem</h3>
+            <div class="row" style="gap:8px;">
+              <div style="flex:1;background:var(--surface);border-radius:7px;padding:10px;text-align:center;">
+                <div style="font-size:1.3rem;font-weight:800;color:var(--red);">~$2T</div>
+                <div style="font-size:0.68rem;color:var(--muted);margin-top:3px;">Laundered globally/year<br>(UNODC estimate)</div>
+              </div>
+              <div style="flex:1;background:var(--surface);border-radius:7px;padding:10px;text-align:center;">
+                <div style="font-size:1.3rem;font-weight:800;color:var(--gold);">$20B+</div>
+                <div style="font-size:0.68rem;color:var(--muted);margin-top:3px;">Crypto illicit volume<br>detected 2022 (Chainalysis)</div>
+              </div>
+              <div style="flex:1;background:var(--surface);border-radius:7px;padding:10px;text-align:center;">
+                <div style="font-size:1.3rem;font-weight:800;color:var(--purple);">0.24%</div>
+                <div style="font-size:0.68rem;color:var(--muted);margin-top:3px;">Of all crypto volume<br>identified as illicit</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card">
+            <h3>Three Core Technical Challenges</h3>
+            <ul class="il">
+              <li>
+                <span class="ico">⚖️</span>
+                <div><strong>Severe Class Imbalance</strong><br>
+                <span>Only 2% illicit overall, 6.5% in test. Accuracy is useless — 93.5% by always predicting licit, catching zero criminals.</span></div>
+              </li>
+              <li>
+                <span class="ico">📉</span>
+                <div><strong>Temporal Concept Drift</strong><br>
+                <span>Illicit rate drops 11.6% → 6.5% train→test. Criminals adapt behavior over time — static models degrade.</span></div>
+              </li>
+              <li>
+                <span class="ico">❓</span>
+                <div><strong>Anonymous Features</strong><br>
+                <span>Elliptic never published feature semantics — 165 columns are named lf_1…93, af_1…72. No domain knowledge available.</span></div>
+              </li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Illicit Transaction Categories in Dataset</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px;">
+              <div style="background:rgba(224,108,117,.08);border:1px solid rgba(224,108,117,.2);border-radius:6px;padding:8px 10px;font-size:0.77rem;"><span style="color:var(--red);font-weight:700;">💰 Money Laundering</span><br><span style="color:var(--muted);">Layering illicit funds through chains of transactions to obscure origin</span></div>
+              <div style="background:rgba(224,108,117,.08);border:1px solid rgba(224,108,117,.2);border-radius:6px;padding:8px 10px;font-size:0.77rem;"><span style="color:var(--red);font-weight:700;">🔒 Ransomware</span><br><span style="color:var(--muted);">Ransom payment addresses identified from law enforcement data</span></div>
+              <div style="background:rgba(224,108,117,.08);border:1px solid rgba(224,108,117,.2);border-radius:6px;padding:8px 10px;font-size:0.77rem;"><span style="color:var(--red);font-weight:700;">🌑 Darknet Markets</span><br><span style="color:var(--muted);">Silk Road, AlphaBay, and other dark market wallets</span></div>
+              <div style="background:rgba(224,108,117,.08);border:1px solid rgba(224,108,117,.2);border-radius:6px;padding:8px 10px;font-size:0.77rem;"><span style="color:var(--red);font-weight:700;">🌀 Mixing Services</span><br><span style="color:var(--muted);">Tumblers that intentionally obscure transaction trails</span></div>
+            </div>
+          </div>
+          <div class="ins">
+            <strong>Primary metric: F1 on illicit class.</strong> Accuracy meaningless at 6.5% base rate. F1 = 2·P·R/(P+R) balances catching criminals (recall) vs. not flooding analysts with false alarms (precision). PR-AUC used for threshold-independent comparison.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S2 DATASET ───────────────────────────────────────────────────── -->
+    <div class="slide" id="s2"
+         data-notes="Elliptic is a blockchain analytics company that labeled Bitcoin wallets using court records, law enforcement data, and industry sources. This is the largest publicly available labeled Bitcoin transaction graph. The 77% unlabeled portion is realistic — in practice, only a tiny fraction of blockchain transactions are ever definitively linked to criminal activity. Each 'edge' is a Bitcoin sent from one transaction output to another transaction input.">
+      <h2>The <span class="accent">Elliptic Dataset</span></h2>
+      <!-- KEY STATS FULL ROW -->
+      <div class="row" style="gap:12px; margin-bottom:12px; flex-shrink:0;">
+        <div class="card stat ca" style="flex:1;"><div class="num accent">203,769</div><div class="lbl">Bitcoin Transactions (nodes)</div></div>
+        <div class="card stat cb" style="flex:1;"><div class="num blue">234,355</div><div class="lbl">Directed Edges (flows)</div></div>
+        <div class="card stat" style="flex:1;"><div class="num gold">49</div><div class="lbl">Time Steps (~2 years)</div></div>
+        <div class="card stat cr" style="flex:1;"><div class="num red">4,545</div><div class="lbl">Illicit Transactions (ground truth)</div></div>
+        <div class="card stat cg" style="flex:1;"><div class="num green">42,019</div><div class="lbl">Licit Transactions (ground truth)</div></div>
+        <div class="card stat" style="flex:1;"><div class="num" style="color:var(--muted);">157,205</div><div class="lbl">Unlabeled Transactions</div></div>
+      </div>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col" style="flex:1.3;">
+          <div class="card">
+            <h3>Three Source Files</h3>
+            <table>
+              <thead><tr><th>File</th><th>Size</th><th>Content</th></tr></thead>
+              <tbody>
+                <tr><td><code>elliptic_txs_features.csv</code></td><td style="color:var(--muted);">657 MB</td><td style="font-size:.77rem;color:var(--muted);">203,769 rows × 165 features (no header). Col 0 = txId, Col 1 = time_step, Cols 2–94 = local features, Cols 95–165 = aggregated neighborhood features.</td></tr>
+                <tr><td><code>elliptic_txs_classes.csv</code></td><td style="color:var(--muted);">3.2 MB</td><td style="font-size:.77rem;color:var(--muted);">txId → class label. Values: <span class="red">1=illicit</span>, <span class="green">2=licit</span>, <span style="color:var(--muted);">unknown=unlabeled</span>. Encoded: 1→1, 2→0 in config.</td></tr>
+                <tr><td><code>elliptic_txs_edgelist.csv</code></td><td style="color:var(--muted);">4.3 MB</td><td style="font-size:.77rem;color:var(--muted);">234,355 directed edges (txId_source, txId_dest). Made undirected for GNN training by adding both directions.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Features — 165 anonymous columns per transaction</h3>
+            <div class="row" style="gap:8px;">
+              <div style="flex:1;background:var(--surface);border-radius:7px;padding:12px;text-align:center;border:1px solid var(--border);">
+                <div style="font-size:1.6rem;font-weight:800;color:var(--accent2);">93</div>
+                <div style="font-size:0.7rem;color:var(--muted);margin-top:4px;line-height:1.4;"><strong style="color:var(--text);">Local features (lf_)</strong><br>Transaction-level stats: amounts, fan-in/out count, fee, BTC volume, time since last activity</div>
+              </div>
+              <div style="flex:1;background:var(--surface);border-radius:7px;padding:12px;text-align:center;border:1px solid var(--border);">
+                <div style="font-size:1.6rem;font-weight:800;color:var(--purple);">71</div>
+                <div style="font-size:0.7rem;color:var(--muted);margin-top:4px;line-height:1.4;"><strong style="color:var(--text);">Aggregated features (af_)</strong><br>Mean/std/max of neighbors' local features — encode graph neighborhood behavior</div>
+              </div>
+              <div style="flex:1;background:var(--surface);border-radius:7px;padding:12px;text-align:center;border:1px solid var(--border);">
+                <div style="font-size:1.6rem;font-weight:800;color:var(--muted);">1</div>
+                <div style="font-size:0.7rem;color:var(--muted);margin-top:4px;line-height:1.4;"><strong style="color:var(--text);">Time step index</strong><br>Excluded from model features — used only for temporal splitting</div>
+              </div>
+            </div>
+            <p style="font-size:.74rem;margin-top:8px;"><strong style="color:var(--gold);">⚠️ Feature names not published by Elliptic</strong> — columns are anonymous. Only cross-model agreement via SHAP can validate signal robustness.</p>
+          </div>
+        </div>
+        <div class="col" style="flex:0.8;">
+          <div class="card" style="flex:1;">
+            <h3>Concept Drift — Illicit Rate Over Time</h3>
+            <div class="img-f" style="height:200px;">
+              <img src="src/concept_drift.png" alt="Concept drift over time steps">
+            </div>
+            <p class="img-cap">Illicit rate drops 11.6% (train) → 6.5% (test) — a 44% relative decline. Random split inflates all metrics by ~5–10 F1 points by leaking this future distribution into training.</p>
+          </div>
+          <div class="ins">
+            <strong>Published by Elliptic (2019), KDD Workshop.</strong><br>
+            Labels sourced from real court cases, law enforcement data, and blockchain forensics. Steps 1–43 labeled; Steps 44–49 unlabeled. Each step ≈ 2 weeks of real Bitcoin activity spanning 2013–2014.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S3 METHODOLOGY ───────────────────────────────────────────────── -->
+    <div class="slide" id="s3"
+         data-notes="The most important design decision: NO random shuffling. If the professor asks 'Why not random split?' — answer: 'Because random split breaks the time structure. Fraud patterns change over time, and if future examples are mixed into training, the model indirectly learns from the future. This is called temporal leakage. In reality, we train on past transactions and predict future transactions, so the split must simulate this.' The validation slice (steps 30–34) is ONLY for threshold calibration — never model selection or re-training. Tuning threshold on own training data → false F1=1.0 on val — classic trap that affects many published AML papers.">
+      <h2>Methodology: <span class="accent">Temporal Split is Critical</span></h2>
+      <div style="flex:1; display:flex; flex-direction:column; gap:12px;">
+        <div class="ins warn">
+          <strong>🚫 No random shuffle.</strong> Time-series data — shuffling leaks future patterns into training and inflates all metrics by 5–10 F1 points. Many published papers on Elliptic fall into this trap; our split is strict and methodologically correct.
+        </div>
+        <div class="tstrip">
+          <div class="ts" style="flex:34;background:rgba(168,178,216,.07);border-right:1px solid var(--border);">
+            <span class="tl blue">TRAIN</span><span class="td">Steps 1–34 · 29,894 labeled txs</span>
+          </div>
+          <div class="ts" style="flex:5;background:rgba(100,255,218,.06);border-right:2px dashed rgba(100,255,218,.3);">
+            <span class="tl accent" style="font-size:.65rem;">VAL</span><span class="td">30–34</span>
+          </div>
+          <div class="ts" style="flex:15;background:rgba(82,214,138,.07);">
+            <span class="tl green">TEST</span><span class="td">Steps 35–49 · 16,670 labeled txs</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="card cb">
+            <h3>Train (Steps 1–34)</h3>
+            <ul class="il">
+              <li><span class="ico">📊</span>29,894 labeled transactions · illicit rate 11.6%</li>
+              <li><span class="ico">🤖</span>All models trained here, no future peeking</li>
+              <li><span class="ico">🔓</span>Unsupervised also sees 136,265 unlabeled rows</li>
+            </ul>
+          </div>
+          <div class="card ca">
+            <h3>Validation (Steps 30–34)</h3>
+            <ul class="il">
+              <li><span class="ico">🎯</span>Only for threshold calibration in neural/ensemble models</li>
+              <li><span class="ico">⚠️</span>Tuning threshold on own training data → false F1=1.0 — classic trap</li>
+              <li><span class="ico">✅</span>Threshold grid-searched here, applied to test exactly once</li>
+            </ul>
+          </div>
+          <div class="card cg">
+            <h3>Test (Steps 35–49)</h3>
+            <ul class="il">
+              <li><span class="ico">🏆</span>Final evaluation — touched once per model</li>
+              <li><span class="ico">📉</span>Illicit rate 6.5% — real concept drift from train</li>
+              <li><span class="ico">🎖️</span>All leaderboard numbers come from here</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Evaluation Protocol per Paradigm</h3>
+          <table>
+            <thead><tr><th>Paradigm</th><th>Training Data</th><th>Threshold Method</th><th>Key Constraint</th></tr></thead>
+            <tbody>
+              <tr><td>Unsupervised</td><td style="font-size:.75rem;color:var(--muted);">All train rows incl. unknown (136K)</td><td style="font-size:.75rem;color:var(--muted);">F1-optimal on labeled train</td><td style="font-size:.75rem;color:var(--muted);">contamination=0.10</td></tr>
+              <tr><td>AE / OCSVM</td><td style="font-size:.75rem;color:var(--muted);">Licit-only train rows (26,432)</td><td style="font-size:.75rem;color:var(--muted);">F1-optimal on val steps 30–34</td><td style="font-size:.75rem;color:var(--muted);">Never see illicit during training</td></tr>
+              <tr class="hl"><td>Supervised</td><td style="font-size:.75rem;color:var(--muted);">Labeled train rows (29,894)</td><td style="font-size:.75rem;color:var(--muted);">Default 0.5</td><td style="font-size:.75rem;color:var(--muted);">class_weight='balanced'</td></tr>
+              <tr><td>GNN</td><td style="font-size:.75rem;color:var(--muted);">Full graph, supervised by train labels</td><td style="font-size:.75rem;color:var(--muted);">Default 0.5</td><td style="font-size:.75rem;color:var(--muted);">Inverse-frequency CrossEntropy</td></tr>
+              <tr><td>Ensemble</td><td style="font-size:.75rem;color:var(--muted);">Labeled train rows (29,894)</td><td style="font-size:.75rem;color:var(--muted);">Grid search on val steps 30–34</td><td style="font-size:.75rem;color:var(--muted);">Threshold NOT tuned on train (leakage trap)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="row" style="gap:10px;">
+          <div class="card" style="flex:0 0 auto; padding:12px 18px;">
+            <span style="font-size:.65rem;color:var(--muted);display:block;margin-bottom:3px;">PRIMARY METRIC</span>
+            <span style="font-size:1rem;font-weight:700;color:var(--accent);">F1 on Illicit Class</span>
+          </div>
+          <div class="card" style="flex:0 0 auto; padding:12px 18px;">
+            <span style="font-size:.65rem;color:var(--muted);display:block;margin-bottom:3px;">SECONDARY</span>
+            <span style="font-size:1rem;font-weight:700;color:var(--accent2);">PR-AUC</span>
+          </div>
+          <div class="card" style="flex:1; padding:12px 16px;">
+            <span style="font-size:.65rem;color:var(--muted);display:block;margin-bottom:3px;">CLASS IMBALANCE STRATEGY</span>
+            <span style="font-size:0.8rem;">RF/GBM: <code>class_weight='balanced'</code> &nbsp;·&nbsp; GNN: inverse-frequency CrossEntropy &nbsp;·&nbsp; AE/VAE: train on licit-only &nbsp;·&nbsp; Unsup: contamination=0.1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S4 FIVE PARADIGMS ────────────────────────────────────────────── -->
+    <div class="slide" id="s4"
+         data-notes="I tested 5 completely different AI approaches. The key insight: supervised labels matter enormously — gap between supervised (F1=0.83) and unsupervised (F1=0.09) is 10x. GNNs come second by leveraging graph structure. Neural autoencoders plateau around F1=0.4. Classical unsupervised essentially fails — illicit txs designed to look normal. For ensemble: 'The ensemble confirmed that graph models provide complementary information, but the strongest predictive signal still came from supervised tabular tree models.' GBM+LGBM+SAGEv2 = F1=0.821 but GBM+Structural alone = 0.8265 — best single model.">
+      <h2>5 Paradigms, <span class="accent">5 Rounds of Improvement</span></h2>
+      <div class="mgrid" style="flex:1;">
+        <div class="mc" style="border-color:rgba(136,146,176,.4);">
+          <div class="mn">🔍 Unsupervised (Classical)</div>
+          <div class="md">IsolationForest, LOF, One-Class SVM on feature space and graph topology. No labels used during training.</div>
+          <div class="mf red">Best F1 ≈ 0.09 — illicit txs are not statistical outliers</div>
+        </div>
+        <div class="mc" style="border-color:rgba(100,255,218,.4);">
+          <div class="mn">🌳 Supervised Tree Models</div>
+          <div class="md">Random Forest, Gradient Boosting, LightGBM with class balancing. SHAP explainability. Optuna hyperparameter tuning (40 trials each).</div>
+          <div class="mf accent">Best F1 = 0.8265 — dominant paradigm throughout</div>
+        </div>
+        <div class="mc" style="border-color:rgba(199,146,234,.4);">
+          <div class="mn">🧠 Neural Anomaly Detection</div>
+          <div class="md">AE, Denoising AE, VAE, β-VAE, LSTM-AE, DOMINANT (Graph AE). Trained licit-only. Key surprise: illicit txs reconstruct with LOWER error — inverted score needed.</div>
+          <div class="mf purple">Best F1 = 0.407 (β-VAE β=0.01)</div>
+        </div>
+        <div class="mc" style="border-color:rgba(168,178,216,.4);">
+          <div class="mn">🕸️ Graph Neural Networks</div>
+          <div class="md">GraphSAGE, GAT and variants. Message passing propagates "guilt by association" through money laundering chains. 10-experiment ablation study.</div>
+          <div class="mf blue">Best F1 = 0.729 (SAGEv2 + pseudo-labels)</div>
+        </div>
+        <div class="mc" style="border-color:rgba(82,214,138,.4); grid-column: 1 / -1;">
+          <div class="mn">🔀 Semi-supervised, Ensemble &amp; Feature Engineering (Rounds 3–5)</div>
+          <div class="md">
+            <strong>Pseudo-labels:</strong> GBM scores unlabeled nodes; p&gt;0.90 → pseudo-illicit; retrain SAGEv2 on 130K nodes (+3.1 F1 for GNN). &nbsp;|&nbsp;
+            <strong>Ensemble:</strong> GBM + LightGBM + SAGEv2 equal soft-vote (F1=0.821). &nbsp;|&nbsp;
+            <strong>Structural features:</strong> 7 topology features (degree, clustering, OddBall) appended to GBM → overall best F1=0.8265.
+          </div>
+          <div class="mf green">Best ensemble = 0.821 · Structural augmentation = overall best = 0.8265</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <span class="badge ba">5 Rounds</span>
+        <span class="badge bb">48 Experiments</span>
+        <span class="badge bg">Optuna 40 trials</span>
+        <span class="badge bp">SHAP + Grad Attribution</span>
+        <span class="badge bgo">EVT Thresholding (GPD)</span>
+      </div>
+    </div>
+
+    <!-- S5 UNSUPERVISED ──────────────────────────────────────────────── -->
+    <div class="slide" id="s5"
+         data-notes="The most counterintuitive finding: classical anomaly detection completely fails. Key explanation for the professor: 'At first, one may think illicit Bitcoin transactions are anomalous and should be easy to detect with unsupervised methods. But the experiments showed the opposite. Illicit transactions do not necessarily appear as isolated outliers in feature space. They may follow repeated laundering patterns — so they can look regular instead of abnormal. That is why pure anomaly detection failed.' DOMINANT is the exception because it uses graph topology. Spectral method fails: Fiedler≈2 means money laundering chains don't form isolated spectral communities — they thread through the same global topology as licit transactions.">
+      <h2>Unsupervised Methods: <span class="red">Why They Fail</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col">
+          <div class="card">
+            <h3>All Classical Detectors Tested</h3>
+            <table>
+              <thead><tr><th>Method</th><th>F1</th><th>AUC</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr><td>Isolation Forest</td><td class="red">0.021</td><td>0.172</td><td style="font-size:.72rem;color:var(--muted);">Random-level</td></tr>
+                <tr><td>Local Outlier Factor</td><td class="gold">0.076</td><td>0.506</td><td style="font-size:.72rem;color:var(--muted);">Transductive only</td></tr>
+                <tr><td>One-Class SVM</td><td class="red">0.023</td><td>0.235</td><td style="font-size:.72rem;color:var(--muted);">Fails</td></tr>
+                <tr><td>IsoForest (structural)</td><td class="gold">0.094</td><td>0.458</td><td style="font-size:.72rem;color:var(--muted);">Best classical</td></tr>
+                <tr><td>IsoForest (spectral K=50)</td><td class="red">0.056</td><td>0.407</td><td style="font-size:.72rem;color:var(--muted);">No signal</td></tr>
+                <tr><td>OCSVM (spectral K=50)</td><td class="red">0.061</td><td>0.391</td><td style="font-size:.72rem;color:var(--muted);">No signal</td></tr>
+                <tr class="hl"><td><strong>DOMINANT (Graph AE)</strong></td><td class="purple">0.212</td><td>0.669</td><td style="font-size:.72rem;color:var(--purple);">Best unsup graph</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="ins warn" style="flex:1;">
+            <strong>Root cause of failure:</strong><br>
+            Money launderers deliberately structure transactions to look normal — fixed amounts, predictable timing, typical fan-in/fan-out ratios (smurfing, layering, mixing). Classical density-based detectors measure "how <em>different</em>" a point is from the majority — but illicit txs are engineered NOT to be different. <strong>They follow repeated laundering templates</strong>, so they can look more regular than licit transactions. They ARE the majority pattern in their operational context.
+          </div>
+          <div class="ins" style="flex:1;">
+            <strong>Spectral embedding failure:</strong><br>
+            Fiedler value ≈ 2.0 — the transaction graph is bipartite-like with no sparse graph cut. Money laundering chains are not isolated spectral communities — they are threaded through the same global topology as licit transactions. Spectral methods detect community structure, not individual node anomalies.
+          </div>
+        </div>
+        <div class="col">
+          <div class="card" style="flex:1;">
+            <h3>β-VAE: Effect of KL Weight on Performance</h3>
+            <div class="img-f" style="height:200px;">
+              <img src="src/beta_f1_curve.png" alt="beta-VAE F1 vs beta curve">
+            </div>
+            <p class="img-cap">Lower β=0.01 wins — reconstruction-dominated. Higher β forces KL regularization which merges licit+illicit in latent space. Best unsupervised: F1=0.407.</p>
+          </div>
+          <div class="card cp">
+            <h3>DOMINANT — Graph AE Architecture</h3>
+            <ul class="il">
+              <li><span class="ico">🔮</span>2-layer GCNConv encoder reconstructs <strong>node attributes</strong> (MSE) + <strong>graph edges</strong> (BCE)</li>
+              <li><span class="ico">📊</span>Joint score: α·attr_err + (1-α)·struct_err per node</li>
+              <li><span class="ico">✅</span>Best unsupervised — <span class="purple">F1=0.212 · AUC=0.669</span> — graph topology carries signal</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S6 SUPERVISED ────────────────────────────────────────────────── -->
+    <div class="slide" id="s6"
+         data-notes="Once we have labels, tree ensemble methods are extremely effective. The jump from LogReg (0.302) to Random Forest (0.801) shows strong non-linearity in this data. Optuna added +5.8 F1 on GBM by finding the right learning rate and depth. The 7 structural topology features give a consistent additional boost. If the professor asks WHY GBM worked: 'Gradient Boosting worked well because the Elliptic dataset contains strong tabular transaction features. Tree models are good for nonlinear relationships, mixed feature interactions, imbalanced tabular data, and anonymous numerical features. The model combines many weak decision trees and captures nonlinear relationships between features.' The baseline progression: GBM baseline 0.766 → Optuna 0.824 → Structural features 0.8265 (best overall).">
+      <h2>Supervised Models: <span class="accent">Tree Ensembles Win</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col" style="flex:1.05;">
+          <div class="card">
+            <h3>Model Progression — F1 on illicit class</h3>
+            <div class="bar-row"><span class="bar-lbl">LogReg baseline</span><div class="bar-trk"><div class="bar-fil" style="width:36.6%;background:var(--muted);"></div></div><span class="bar-val" style="color:var(--muted);">0.302</span></div>
+            <div class="bar-row"><span class="bar-lbl">GBM baseline</span><div class="bar-trk"><div class="bar-fil" style="width:92.8%;background:var(--accent2);"></div></div><span class="bar-val blue">0.766</span></div>
+            <div class="bar-row"><span class="bar-lbl">Random Forest</span><div class="bar-trk"><div class="bar-fil" style="width:97.1%;background:var(--accent2);"></div></div><span class="bar-val blue">0.801</span></div>
+            <div class="bar-row"><span class="bar-lbl">RF + Graph Feats</span><div class="bar-trk"><div class="bar-fil" style="width:97.8%;background:var(--gold);"></div></div><span class="bar-val gold">0.807</span></div>
+            <div class="bar-row"><span class="bar-lbl">LightGBM</span><div class="bar-trk"><div class="bar-fil" style="width:99.0%;background:var(--gold);"></div></div><span class="bar-val gold">0.817</span></div>
+            <div class="bar-row"><span class="bar-lbl">GBM + Optuna</span><div class="bar-trk"><div class="bar-fil" style="width:99.8%;background:var(--green);"></div></div><span class="bar-val green">0.824</span></div>
+            <div class="bar-row"><span class="bar-lbl">GBM + Structural</span><div class="bar-trk"><div class="bar-fil" style="width:100%;background:var(--accent);"></div></div><span class="bar-val accent"><strong>0.8265</strong></span></div>
+          </div>
+          <div class="card ca">
+            <h3>🏆 Best: GBM + 7 Topology Features</h3>
+            <p style="color:var(--text);font-size:0.85rem;margin-bottom:6px;">165 tabular + 7 structural = 172 features total.<br><span class="accent">F1=0.8265 · AUC=0.9243 · AP=0.8031</span></p>
+            <p style="font-size:0.76rem;">7 features: in/out/total degree · clustering · avg_neighbor_degree · ego_density · OddBall deviation</p>
+          </div>
+          <div class="card ca">
+            <h3>Why GBM Works on This Dataset</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;">
+              <div style="background:var(--surface);border-radius:6px;padding:7px 10px;font-size:0.75rem;"><span style="color:var(--accent);font-weight:700;">Nonlinear relationships</span><br><span style="color:var(--muted);">Feature interactions that logistic regression misses</span></div>
+              <div style="background:var(--surface);border-radius:6px;padding:7px 10px;font-size:0.75rem;"><span style="color:var(--accent);font-weight:700;">Mixed feature interactions</span><br><span style="color:var(--muted);">Tree splits exploit feature combinations naturally</span></div>
+              <div style="background:var(--surface);border-radius:6px;padding:7px 10px;font-size:0.75rem;"><span style="color:var(--accent);font-weight:700;">Imbalanced tabular data</span><br><span style="color:var(--muted);">class_weight='balanced' + boosting handles 2% class</span></div>
+              <div style="background:var(--surface);border-radius:6px;padding:7px 10px;font-size:0.75rem;"><span style="color:var(--accent);font-weight:700;">Anonymous numerical features</span><br><span style="color:var(--muted);">No semantic knowledge needed — splits on values</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Optuna Tuning — 40 trials each</h3>
+            <table>
+              <thead><tr><th>Model</th><th>Baseline</th><th>Tuned</th><th>Best params</th></tr></thead>
+              <tbody>
+                <tr class="hl"><td>GBM</td><td>0.766</td><td class="green">0.824</td><td style="font-size:.72rem;color:var(--muted);">n=245 depth=8 lr=0.121</td></tr>
+                <tr><td>GraphSAGE</td><td>0.541</td><td class="accent">0.688</td><td style="font-size:.72rem;color:var(--muted);">h=256 drop=0.45 lr=0.0038</td></tr>
+                <tr><td>RandomForest</td><td>0.801</td><td style="color:var(--muted);">0.797</td><td style="font-size:.72rem;color:var(--muted);">Near ceiling</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="col" style="flex:0.95;">
+          <div class="card" style="flex:1;">
+            <h3>Round-by-Round Improvement</h3>
+            <div class="img-f" style="height:190px;">
+              <img src="src/improvement_comparison.png" alt="Round 1 improvement comparison">
+            </div>
+            <p class="img-cap">Round 1: LightGBM replaces GBM baseline (+5.1 F1). RF+graph features adds +0.6 F1.</p>
+          </div>
+          <div class="card" style="flex:1;">
+            <h3>All 5 Rounds — Best Models Progression</h3>
+            <div class="img-f" style="height:150px;">
+              <img src="src/final_round_progression.png" alt="Final round progression chart">
+            </div>
+            <p class="img-cap">Each improvement round adds marginal gains on top of a strong baseline. GBM near ceiling after Round 1.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S7 GNN ───────────────────────────────────────────────────────── -->
+    <div class="slide" id="s7"
+         data-notes="GNNs are motivated by the fact that money laundering creates chains of connected transactions. Each node aggregates its neighbors' features — so a transaction 'knows' about its neighborhood's behavior. 3 layers captures 3-hop chains, typical for AML layering operations (placement → layering → integration). GAT fails because the graph is sparse (avg degree 2.3) — as I can say to the professor: 'GAT underperformed GraphSAGE because the graph is sparse. In this setting, simple mean aggregation was more stable than attention-based aggregation.' For pseudo-labels: 'Pseudo-labeling helped the GNN because the graph contains many unlabeled nodes. By adding confident pseudo-labels, the GNN had more supervised nodes in the graph and could learn better neighborhood patterns.'">
+      <h2>Graph Neural Networks: <span class="blue">Guilt by Association</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col">
+          <div class="card cb">
+            <h3>Why GNNs for Bitcoin?</h3>
+            <ul class="il">
+              <li><span class="ico">🔗</span>Money laundering creates <strong>chains of connected transactions</strong> — illicit nodes cluster with others</li>
+              <li><span class="ico">📡</span><strong>Message passing:</strong> each node aggregates neighbors' features — captures "guilt by association"</li>
+              <li><span class="ico">🧩</span>Captures structural patterns invisible to tabular models</li>
+            </ul>
+            <div style="margin-top:9px;display:flex;gap:6px;">
+              <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;">
+                <div style="color:var(--accent2);font-weight:700;">1-hop</div>
+                <div style="color:var(--muted);margin-top:2px;">direct neighbors</div>
+              </div>
+              <div style="color:var(--border2);display:flex;align-items:center;">→</div>
+              <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;">
+                <div style="color:var(--accent2);font-weight:700;">2-hop</div>
+                <div style="color:var(--muted);margin-top:2px;">neighbors of neighbors</div>
+              </div>
+              <div style="color:var(--border2);display:flex;align-items:center;">→</div>
+              <div style="flex:1;background:rgba(100,255,218,.08);border:1px solid rgba(100,255,218,.25);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;">
+                <div style="color:var(--accent);font-weight:700;">3-hop</div>
+                <div style="color:var(--muted);margin-top:2px;">AML chain context</div>
+              </div>
+            </div>
+            <p style="font-size:0.69rem;color:var(--muted);margin-top:5px;">3-layer model captures placement → layering → integration steps in a money laundering flow</p>
+          </div>
+          <div class="card">
+            <h3>Architecture Change Impact</h3>
+            <table>
+              <thead><tr><th>Change</th><th>F1 gain</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Hidden 64→256</td><td class="gold">+0.052</td><td style="font-size:.75rem;color:var(--muted);">More capacity</td></tr>
+                <tr><td>2 layers → 3 layers</td><td class="gold">+0.038</td><td style="font-size:.75rem;color:var(--muted);">3-hop AML chains</td></tr>
+                <tr class="hl"><td>LayerNorm + self-loops</td><td class="accent">+0.068</td><td style="font-size:.75rem;color:var(--muted);">Stability at depth</td></tr>
+                <tr><td>Pseudo-labels</td><td class="green">+0.031</td><td style="font-size:.75rem;color:var(--muted);">Denser neighborhoods</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Training Loss Convergence</h3>
+            <div class="img-f" style="height:120px;">
+              <img src="src/gnn_loss.png" alt="GNN training loss curve">
+            </div>
+            <p class="img-cap">GraphSAGE training and validation loss — steady convergence, no divergence</p>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card" style="flex:1;">
+            <h3>10-Experiment Ablation — Progression</h3>
+            <div class="img-f" style="height:175px;">
+              <img src="src/gnn_experiments_progression.png" alt="GNN ablation progression">
+            </div>
+            <p class="img-cap">Exps 1–7: GraphSAGE depth/width/norm ablation. Exps 8–10: GAT family — attention consistently underperforms.</p>
+          </div>
+          <div class="card" style="flex:1;">
+            <h3>Top-5 GNN Models — Radar Chart</h3>
+            <div class="img-f" style="height:160px;">
+              <img src="src/gnn_experiments_radar.png" alt="GNN radar chart">
+            </div>
+            <p class="img-cap">SAGEv2 dominates across all metrics. Best GAT (GATv2) F1=0.382 vs SAGEv2 F1=0.698 — avg degree 2.3 too sparse for attention.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S8 NEURAL AE ─────────────────────────────────────────────────── -->
+    <div class="slide" id="s8"
+         data-notes="An autoencoder learns to compress then reconstruct its input. Trained ONLY on licit transactions, it learns 'normal' patterns. Theory: illicit txs should give high reconstruction error. But the opposite happened. Key explanation: 'In a standard reconstruction-based anomaly detector, we expect anomalies to reconstruct worse. However, in this dataset, illicit transactions sometimes reconstructed better than licit ones. This suggests that illicit transactions may follow more regular or templated patterns, while licit transactions are more diverse. Therefore, the anomaly score had to be inverted — using negative reconstruction error.' β-VAE with β=0.01 is the best: near-zero KL weight ≈ standard AE, avoiding the KL regularization that merges licit+illicit in latent space.">
+      <h2>Neural Anomaly Detection: <span class="purple">How Autoencoders Work &amp; The Surprise</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col" style="flex:1.1;">
+          <!-- VISUAL DIAGRAM -->
+          <div class="card cp">
+            <h3>Step 1 — How an Autoencoder Works</h3>
+            <div style="display:flex;align-items:center;gap:6px;margin:8px 0;font-size:0.75rem;">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;flex-shrink:0;">
+                <div style="font-size:0.7rem;color:var(--muted);">Input</div>
+                <div style="font-weight:700;color:var(--text);">165</div>
+                <div style="font-size:0.65rem;color:var(--muted);">features</div>
+              </div>
+              <div style="color:var(--purple);font-size:1rem;">→</div>
+              <div style="background:rgba(199,146,234,.1);border:1px solid rgba(199,146,234,.3);border-radius:6px;padding:8px 10px;text-align:center;flex-shrink:0;">
+                <div style="font-size:0.65rem;color:var(--muted);">Encoder</div>
+                <div style="font-weight:700;color:var(--purple);">128→64</div>
+                <div style="font-size:0.65rem;color:var(--muted);">compress</div>
+              </div>
+              <div style="color:var(--purple);font-size:1rem;">→</div>
+              <div style="background:rgba(199,146,234,.15);border:2px solid rgba(199,146,234,.5);border-radius:6px;padding:8px 10px;text-align:center;flex-shrink:0;">
+                <div style="font-size:0.65rem;color:var(--muted);">Bottleneck</div>
+                <div style="font-weight:700;color:var(--purple);">32</div>
+                <div style="font-size:0.65rem;color:var(--muted);">latent</div>
+              </div>
+              <div style="color:var(--purple);font-size:1rem;">→</div>
+              <div style="background:rgba(199,146,234,.1);border:1px solid rgba(199,146,234,.3);border-radius:6px;padding:8px 10px;text-align:center;flex-shrink:0;">
+                <div style="font-size:0.65rem;color:var(--muted);">Decoder</div>
+                <div style="font-weight:700;color:var(--purple);">64→128</div>
+                <div style="font-size:0.65rem;color:var(--muted);">reconstruct</div>
+              </div>
+              <div style="color:var(--purple);font-size:1rem;">→</div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;flex-shrink:0;">
+                <div style="font-size:0.7rem;color:var(--muted);">Output</div>
+                <div style="font-weight:700;color:var(--text);">165</div>
+                <div style="font-size:0.65rem;color:var(--muted);">reconstructed</div>
+              </div>
+              <div style="color:var(--border2);font-size:0.9rem;">→</div>
+              <div style="background:var(--surface);border:1px dashed var(--border2);border-radius:6px;padding:8px 10px;text-align:center;flex-shrink:0;">
+                <div style="font-size:0.65rem;color:var(--muted);">MSE</div>
+                <div style="font-weight:700;color:var(--gold);">Error</div>
+                <div style="font-size:0.65rem;color:var(--muted);">score</div>
+              </div>
+            </div>
+            <p style="font-size:.77rem;color:var(--muted);">Trained on <strong>licit-only</strong> transactions → learns to compress/reconstruct "normal" behavior. Theory: illicit txs should give high reconstruction error because the model never learned their patterns.</p>
+          </div>
+          <!-- SURPRISE -->
+          <div class="ins warn">
+            <strong>Step 2 — The Surprise:</strong> Illicit transactions actually reconstruct with <strong>LOWER error</strong> than licit ones. Why? Money laundering operations use repetitive, machine-like templates — fixed amounts, fixed fan-out, systematic timing. The autoencoder finds them easy to compress. <strong>Fix: anomaly score = −MSE (inverted).</strong> Auto-detected by comparing ROC-AUC(score) vs ROC-AUC(−score) on the validation set.
+          </div>
+          <div class="card" style="flex:1;">
+            <h3>Reconstruction Error Distribution (Proof)</h3>
+            <div class="img-f" style="height:140px;">
+              <img src="src/autoencoder_errors.png" alt="AE reconstruction error distributions">
+            </div>
+            <p class="img-cap">Orange (illicit) peaks at LOWER MSE than blue (licit) — confirms inversion. The two distributions overlap significantly, explaining the F1 ceiling.</p>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card" style="flex:1;">
+            <h3>Round 2 — Deep Architecture Results</h3>
+            <div class="img-f" style="height:155px;">
+              <img src="src/deep_improvement_comparison.png" alt="Deep architecture improvements">
+            </div>
+            <p class="img-cap">GraphSAGEv2 biggest jump (+15.7 F1). VAEv2 and GATv2 both regressed — ELBO score and attention mechanism both hurt on this dataset.</p>
+          </div>
+          <div class="card">
+            <h3>All AE Variants — F1 Ranking</h3>
+            <table>
+              <thead><tr><th>Method</th><th>F1</th><th>Key insight</th></tr></thead>
+              <tbody>
+                <tr><td>Autoencoder (baseline)</td><td>0.356</td><td style="font-size:.72rem;color:var(--muted);">Latent=32, standard MSE</td></tr>
+                <tr><td>VAE (β=1.0)</td><td class="red">0.340</td><td style="font-size:.72rem;color:var(--muted);">KL regularization hurts — merges classes</td></tr>
+                <tr><td>Denoising AE</td><td>0.361</td><td style="font-size:.72rem;color:var(--muted);">Smaller latent=8, noise_std=0.1</td></tr>
+                <tr class="hl"><td>β-VAE (β=0.01)</td><td class="purple"><strong>0.407</strong></td><td style="font-size:.72rem;color:var(--muted);">Near-zero KL ≈ standard AE → best</td></tr>
+                <tr><td>DOMINANT (Graph AE)</td><td class="accent">0.212</td><td style="font-size:.72rem;color:var(--muted);">Uses graph edges + attr jointly</td></tr>
+                <tr><td>LSTM-AE</td><td class="red">0.122</td><td style="font-size:.72rem;color:var(--muted);">Per-timestep aggregate — too coarse</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="ins">
+            <strong>Ceiling ~F1=0.41</strong> for unsupervised AE on this dataset. Without labels, models cannot overcome the fundamental problem: illicit txs are engineered to be structurally normal. Supervised labels are required to exceed F1=0.5.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S9 EXPLAINABILITY ────────────────────────────────────────────── -->
+    <div class="slide" id="s9"
+         data-notes="Since feature names are anonymous, the only way to validate that models learn real signals — not noise — is to check if different model families agree. If the professor asks 'Can you interpret the features?' — answer: 'Not directly, because the dataset anonymizes the features. But I interpreted them statistically using SHAP and cross-model agreement. The fact that some features were important for different model families — Random Forest, GBM, and GraphSAGE — suggests they are robust predictive signals, not overfitting artifacts.' Three features appear top-20 in ALL three methods: lf_53, lf_90, af_70. af_70 is a neighborhood-aggregated feature → confirms graph structure carries genuine anomaly signal.">
+      <h2>Explainability: <span class="accent">SHAP + Gradient Attribution</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col" style="flex:1.4;">
+          <div class="row" style="flex:1; gap:10px;">
+            <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+              <p style="font-size:.68rem;color:var(--muted);text-align:center;">SHAP Beeswarm — Random Forest</p>
+              <div class="img-f" style="flex:1; min-height:0; height:165px;">
+                <img src="src/shap_rf_beeswarm.png" alt="SHAP RF beeswarm">
+              </div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+              <p style="font-size:.68rem;color:var(--muted);text-align:center;">SHAP Beeswarm — Gradient Boosting</p>
+              <div class="img-f" style="flex:1; min-height:0; height:165px;">
+                <img src="src/shap_gbm_beeswarm.png" alt="SHAP GBM beeswarm">
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; flex:1;">
+            <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+              <p style="font-size:.68rem;color:var(--muted);text-align:center;">Waterfall — single illicit tx (RF)</p>
+              <div class="img-f" style="flex:1; min-height:0; height:130px;">
+                <img src="src/shap_rf_waterfall_illicit.png" alt="SHAP waterfall illicit transaction">
+              </div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+              <p style="font-size:.68rem;color:var(--muted);text-align:center;">GNN Gradient Attribution</p>
+              <div class="img-f" style="flex:1; min-height:0; height:130px;">
+                <img src="src/gnn_gradient_attribution.png" alt="GNN gradient attribution">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col" style="flex:0.7;">
+          <div class="card ca">
+            <h3>🏆 Triple Overlap</h3>
+            <p style="font-size:.82rem;margin-bottom:10px;">Top-20 in <strong>all three</strong> model families:</p>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;">
+              <div style="flex:1;background:var(--surface);border:1px solid rgba(100,255,218,.3);border-radius:6px;padding:9px;text-align:center;">
+                <div style="font-family:monospace;font-weight:700;font-size:1rem;color:var(--accent);">lf_53</div>
+                <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">Local feat #53</div>
+              </div>
+              <div style="flex:1;background:var(--surface);border:1px solid rgba(100,255,218,.3);border-radius:6px;padding:9px;text-align:center;">
+                <div style="font-family:monospace;font-weight:700;font-size:1rem;color:var(--accent);">lf_90</div>
+                <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">Local feat #90</div>
+              </div>
+              <div style="flex:1;background:var(--surface);border:1px solid rgba(100,255,218,.3);border-radius:6px;padding:9px;text-align:center;">
+                <div style="font-family:monospace;font-weight:700;font-size:1rem;color:var(--accent);">af_70</div>
+                <div style="font-size:.67rem;color:var(--muted);margin-top:3px;">Aggregated #70</div>
+              </div>
+            </div>
+            <p style="font-size:.75rem;margin-top:9px;"><code>af_70</code> is a neighborhood-aggregated feature → confirms graph signal is real across all model families.</p>
+          </div>
+          <div class="card">
+            <h3>RF ∩ GBM (7/20 features)</h3>
+            <div style="font-family:monospace;font-size:.79rem;color:var(--muted);line-height:2.1;">
+              lf_18 · lf_47 · <strong class="accent">lf_53</strong> · lf_59 · lf_76 · <strong class="accent">lf_90</strong> · <strong class="accent">af_70</strong>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Methods</h3>
+            <ul class="il">
+              <li><span class="ico">🌲</span><strong>SHAP TreeExplainer</strong> — exact Shapley values for RF + GBM</li>
+              <li><span class="ico">📡</span><strong>Gradient attribution</strong> — backprop class score through GraphSAGE to inputs</li>
+              <li><span class="ico">🔮</span>Cross-model agreement validates signal despite anonymous column names</li>
+            </ul>
+          </div>
+          <div class="ins gold-box">
+            <strong>Q: "Can you interpret the features?"</strong><br>
+            <span style="font-size:.78rem;">Not directly — Elliptic never published feature semantics. But I interpreted them <em>statistically</em> using SHAP and cross-model agreement. lf_53, lf_90, af_70 appear important for RF, GBM, and GraphSAGE independently — so they are robust signals, not noise. <code>af_70</code> is a neighborhood-aggregated feature, confirming graph structure matters.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S10 LEADERBOARD ──────────────────────────────────────────────── -->
+    <div class="slide" id="s10"
+         data-notes="This is the complete picture — 48 experiments across 5 paradigms ranked by illicit-class F1. Five clear tiers. Supervised trees are in their own league. GNNs are solid second. Neural autoencoders plateau 0.2–0.4. Topology-only unsupervised barely works. Classical unsupervised fails entirely. The gap between supervised (0.83) and unsupervised (0.09) is 10x — labels matter enormously.">
+      <h2>Full Leaderboard: <span class="accent">48 Experiments Ranked</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col" style="flex:1.5;">
+          <div class="card" style="flex:1;">
+            <h3>Top 15 Models — F1 on Illicit Class</h3>
+            <div class="img-f" style="flex:1; min-height:0; height:280px;">
+              <img src="src/final_top15_f1.png" alt="Top 15 F1 bar chart">
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card" style="flex:1;">
+            <h3>All Paradigms — F1 vs AUC</h3>
+            <div class="img-f" style="height:185px;">
+              <img src="src/final_tier_comparison.png" alt="Tier comparison F1 vs AUC">
+            </div>
+            <p class="img-cap">Best model per tier plotted on F1 vs ROC-AUC axes. Supervised trees dominate both dimensions.</p>
+          </div>
+          <div class="card">
+            <h3>Five Performance Tiers</h3>
+            <div class="bar-row"><span class="bar-lbl" style="width:165px;">🌳 Supervised Trees</span><div class="bar-trk"><div class="bar-fil" style="width:100%;background:var(--accent);"></div></div><span class="bar-val accent">0.74–0.83</span></div>
+            <div class="bar-row"><span class="bar-lbl" style="width:165px;">🕸️ GNN Supervised</span><div class="bar-trk"><div class="bar-fil" style="width:88%;background:var(--accent2);"></div></div><span class="bar-val blue">0.53–0.73</span></div>
+            <div class="bar-row"><span class="bar-lbl" style="width:165px;">🧠 Neural AE</span><div class="bar-trk"><div class="bar-fil" style="width:49%;background:var(--purple);"></div></div><span class="bar-val purple">0.21–0.41</span></div>
+            <div class="bar-row"><span class="bar-lbl" style="width:165px;">🔍 Unsup Structural</span><div class="bar-trk"><div class="bar-fil" style="width:11%;background:var(--gold);"></div></div><span class="bar-val gold">0.06–0.09</span></div>
+            <div class="bar-row"><span class="bar-lbl" style="width:165px;">❌ Classical Unsup</span><div class="bar-trk"><div class="bar-fil" style="width:10%;background:var(--red);"></div></div><span class="bar-val red">0.02–0.08</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S11 ALL MODELS CHART ─────────────────────────────────────────── -->
+    <div class="slide" id="s11"
+         data-notes="This is the complete picture of all 18 model versions across all rounds plotted together. The supervised ceiling is clear at F1=0.82+. GNNs cluster below at 0.5–0.73. AE-based methods at 0.2–0.41. Classical unsupervised is off the bottom of the chart. The top-10 table on the right gives you the exact numbers to cite. Key message: the gap between best supervised (0.8265) and best unsupervised (0.094 classical, 0.212 graph AE) is enormous — labels are essential.">
+      <h2>Complete Model Comparison: <span class="accent">All Paradigms Together</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col" style="flex:1.3;">
+          <div class="card" style="flex:1;">
+            <h3>Final Comparison — All Model Families &amp; Versions</h3>
+            <div class="img-f" style="flex:1; min-height:0; height:310px;">
+              <img src="src/final_comparison.png" alt="Final comparison all models">
+            </div>
+            <p class="img-cap">All 18 model versions across 5 rounds. Supervised tree ceiling F1≈0.82; GNNs 0.54–0.73; AE-based 0.21–0.41; Classical unsupervised below axis scale.</p>
+          </div>
+        </div>
+        <div class="col" style="flex:0.85;">
+          <div class="card" style="flex:1;">
+            <h3>Top-10 Final Leaderboard</h3>
+            <table>
+              <thead><tr><th>Rank</th><th>Model</th><th>F1</th><th>AUC</th></tr></thead>
+              <tbody>
+                <tr class="hl"><td>1</td><td><strong>GBM + Structural</strong></td><td class="accent"><strong>0.8265</strong></td><td>0.9243</td></tr>
+                <tr><td>2</td><td>GBM Optuna</td><td class="green">0.8241</td><td>0.920</td></tr>
+                <tr><td>3</td><td>GBM + PseudoLabels</td><td class="green">0.8235</td><td>0.924</td></tr>
+                <tr><td>4</td><td>Ensemble (GBM+LGBM+SAGEv2)</td><td class="green">0.821</td><td>0.924</td></tr>
+                <tr><td>5</td><td>LightGBM</td><td class="gold">0.817</td><td>0.930</td></tr>
+                <tr><td>6</td><td>GBM + Temporal Rolling</td><td class="gold">0.8179</td><td>0.930</td></tr>
+                <tr><td>7</td><td>RF + Graph Features</td><td class="gold">0.807</td><td>0.942</td></tr>
+                <tr><td>8</td><td>Random Forest</td><td class="gold">0.801</td><td>0.935</td></tr>
+                <tr><td>9</td><td>SAGEv2 + PseudoLabels</td><td class="blue">0.7293</td><td>0.890</td></tr>
+                <tr><td>10</td><td>GraphSAGEv2</td><td class="blue">0.698</td><td>0.913</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="row" style="gap:8px; flex-shrink:0;">
+            <div class="card stat ca" style="flex:1;padding:10px;"><div class="num" style="font-size:1.5rem;">0.8265</div><div class="lbl">Best F1<br>GBM+Struct</div></div>
+            <div class="card stat cb" style="flex:1;padding:10px;"><div class="num" style="font-size:1.5rem;">0.698</div><div class="lbl">Best GNN<br>SAGEv2</div></div>
+            <div class="card stat cp" style="flex:1;padding:10px;"><div class="num" style="font-size:1.5rem;">0.407</div><div class="lbl">Best Unsup<br>β-VAE</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S12 PR / CONFUSION MATRICES ─────────────────────────────────── -->
+    <div class="slide" id="s12"
+         data-notes="PR curves show precision-recall tradeoff across all thresholds — useful because they don't depend on where you set the cutoff. At 6.5% illicit rate, ROC-AUC is optimistic due to many true negatives. The four confusion matrices let you compare how each model deals with the false positive / false negative tradeoff. The ensemble finds most illicit with manageable false alarms. Classical GraphSAGE has more misses. Autoencoder has high false positives — expected for unsupervised.">
+      <h2>Evaluation: <span class="accent">PR Curves &amp; Confusion Matrices</span></h2>
+      <div class="row" style="flex:1; align-items:stretch;">
+        <div class="col" style="flex:1.3;">
+          <div class="card" style="flex:1; display:flex; flex-direction:column;">
+            <h3>Precision-Recall Curves — All Key Models</h3>
+            <div class="img-f" style="flex:1; min-height:0;">
+              <img src="src/pr_curves.png" alt="Precision-Recall curves" style="width:100%; height:100%; object-fit:contain;">
+            </div>
+            <p class="img-cap" style="margin-top:6px;">Threshold-independent comparison. Each curve sweeps all possible classification thresholds. A model in the top-right corner is good at both catching criminals AND avoiding false alarms simultaneously. GBM and RF dominate. DOMINANT (Graph AE) still shows a real curve — it has signal, just weaker.</p>
+          </div>
+        </div>
+        <div class="col">
+          <h3 style="color:var(--muted);font-size:.72rem;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;">Confusion Matrices</h3>
+          <div class="row" style="flex:1; gap:8px;">
+            <div class="col" style="gap:6px;">
+              <p style="font-size:.67rem;color:var(--muted);text-align:center;">Ensemble (GBM+LGBM+SAGEv2)</p>
+              <div class="img-f" style="flex:1; min-height:0;"><img src="src/cm_Ensemble.png" alt="CM Ensemble"></div>
+              <p style="font-size:.67rem;color:var(--muted);text-align:center;">DOMINANT (Graph AE)</p>
+              <div class="img-f" style="flex:1; min-height:0;"><img src="src/cm_DOMINANT.png" alt="CM DOMINANT"></div>
+            </div>
+            <div class="col" style="gap:6px;">
+              <p style="font-size:.67rem;color:var(--muted);text-align:center;">GraphSAGE baseline</p>
+              <div class="img-f" style="flex:1; min-height:0;"><img src="src/cm_GraphSAGE.png" alt="CM GraphSAGE"></div>
+              <p style="font-size:.67rem;color:var(--muted);text-align:center;">Autoencoder baseline</p>
+              <div class="img-f" style="flex:1; min-height:0;"><img src="src/cm_Autoencoder.png" alt="CM Autoencoder"></div>
+            </div>
+          </div>
+          <div class="ins" style="font-size:.76rem;">
+            <strong>Read:</strong> Bottom-right = caught criminals · Bottom-left = missed criminals (minimize) · Top-right = false alarms (keep low)
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S13 INFERENCE ────────────────────────────────────────────────── -->
+    <div class="slide" id="s13"
+         data-notes="The production pipeline loads the best model — GBM trained on 172 features — plus its scaler, computes graph topology features from the edge list at scoring time, and outputs a risk probability per transaction. GBM inference is under 1ms per transaction — fast enough for real-time AML screening. The scaler must be the one fitted on training data only; fitting a new scaler on the input would cause data leakage. The pipeline also supports using the GNN ensemble for higher-accuracy at the cost of 10ms per transaction.">
+      <h2>Production <span class="accent">Inference Pipeline</span></h2>
+      <div style="flex:1; display:flex; flex-direction:column; gap:10px; width:100%;">
+        <!-- PIPE -->
+        <div class="pipe" style="height:70px;">
+          <div class="pipe-step"><div class="pi">📊</div><div class="pt">Raw Input</div><div class="pd">features.csv<br>edgelist.csv</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="pi">🔗</div><div class="pt">Graph Build</div><div class="pd">NetworkX<br>adjacency graph</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="pi">📐</div><div class="pt">Topology Feats</div><div class="pd">7 structural<br>degree/clustering/OddBall</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="pi">⚙️</div><div class="pt">Scale</div><div class="pd">StandardScaler<br>(train-fit only)</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step" style="border-color:rgba(100,255,218,.35);"><div class="pi">🌲</div><div class="pt" style="color:var(--accent);">GBM Model</div><div class="pd">172 features<br>gbm_structural.joblib</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="pi">📈</div><div class="pt">prob_illicit</div><div class="pd">0.0 – 1.0<br>per transaction</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="pi">🏷️</div><div class="pt">Risk Label</div><div class="pd">HIGH/MED/LOW</div></div>
+        </div>
+        <div class="row" style="flex:1; align-items:stretch; gap:12px;">
+          <div class="col" style="flex:1.2;">
+            <div class="card cg">
+              <h3>Python API</h3>
+              <pre>from src.inference import load_pipeline, score_transactions, score_from_csv
+
+# Load best model (GBM + Structural, F1=0.8265)
+pipeline = load_pipeline()   # reads models/ directory
+
+# Option A: score from DataFrames
+results = score_transactions(pipeline, df_features, df_edges)
+# → [txId, prob_illicit, label, risk]
+
+# Option B: score directly from CSV files
+results = score_from_csv(
+    features_csv="data/elliptic_txs_features.csv",
+    edgelist_csv="data/elliptic_txs_edgelist.csv",
+    output_csv="scored_transactions.csv",
+)</pre>
+            </div>
+            <div class="card">
+              <h3>7 Structural Features Computed at Inference Time</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:4px;">
+                <div style="background:var(--surface);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;"><span class="accent">in_degree</span><br><span style="color:var(--muted);">inbound edges</span></div>
+                <div style="background:var(--surface);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;"><span class="accent">out_degree</span><br><span style="color:var(--muted);">outbound edges</span></div>
+                <div style="background:var(--surface);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;"><span class="accent">total_degree</span><br><span style="color:var(--muted);">total connections</span></div>
+                <div style="background:var(--surface);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;"><span class="accent">clustering</span><br><span style="color:var(--muted);">local density</span></div>
+                <div style="background:var(--surface);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;"><span class="accent">avg_nb_deg</span><br><span style="color:var(--muted);">neighbor avg degree</span></div>
+                <div style="background:var(--surface);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;"><span class="accent">ego_density</span><br><span style="color:var(--muted);">1-hop subgraph</span></div>
+                <div style="background:var(--surface);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;"><span class="accent">OddBall</span><br><span style="color:var(--muted);">edge/node deviation</span></div>
+                <div style="background:var(--surface3);border-radius:6px;padding:7px;text-align:center;font-size:0.7rem;color:var(--muted);">+165 tabular<br>= 172 total</div>
+              </div>
+            </div>
+          </div>
+          <div class="col" style="flex:0.6;">
+            <div class="row" style="gap:8px; flex-shrink:0;">
+              <div class="card cr" style="flex:1;text-align:center;padding:14px;">
+                <div style="font-weight:800;font-size:1.4rem;">HIGH</div>
+                <div style="font-size:.72rem;color:var(--muted);margin-top:4px;">prob ≥ 0.70</div>
+                <div style="font-size:.68rem;color:var(--red);margin-top:4px;">Escalate immediately</div>
+              </div>
+              <div class="card cgo" style="flex:1;text-align:center;padding:14px;">
+                <div style="font-weight:800;font-size:1.4rem;">MED</div>
+                <div style="font-size:.72rem;color:var(--muted);margin-top:4px;">prob ≥ 0.30</div>
+                <div style="font-size:.68rem;color:var(--gold);margin-top:4px;">Flag for review</div>
+              </div>
+              <div class="card cg" style="flex:1;text-align:center;padding:14px;">
+                <div style="font-weight:800;font-size:1.4rem;">LOW</div>
+                <div style="font-size:.72rem;color:var(--muted);margin-top:4px;">prob &lt; 0.30</div>
+                <div style="font-size:.68rem;color:var(--green);margin-top:4px;">Pass through</div>
+              </div>
+            </div>
+            <div class="card ca">
+              <h3>Performance</h3>
+              <ul class="il">
+                <li><span class="ico">⚡</span><strong>GBM inference</strong> &lt;1ms per transaction — suitable for real-time screening</li>
+                <li><span class="ico">🕸️</span><strong>SAGEv2</strong> ~10ms per transaction — batch processing use</li>
+                <li><span class="ico">🖥️</span>GPU: RTX 5070 Ti · CUDA 12.8 · 12GB VRAM</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Saved Model Artifacts</h3>
+              <div style="font-family:monospace;font-size:.7rem;color:var(--muted);line-height:2;">
+                gbm_structural.joblib<br>
+                scaler_structural.joblib<br>
+                graphsagev2_pseudo.pt<br>
+                lightgbm.joblib<br>
+                dominant.pt · autoencoder.pt
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S14 CONCLUSION ───────────────────────────────────────────────── -->
+    <div class="slide" id="s14"
+         data-notes="The core message: supervised labels are indispensable. Without them illicit transactions are invisible to classical detectors — they look too normal. The most important methodological finding is the threshold calibration trap: tuning the decision threshold on your own training data gives F1=1.0 on validation — completely fake. Many published AML papers do this. Our strict temporal split avoids it. The 48 experiments produced a rigorous benchmark and multiple publishable findings. Future work should add GNNExplainer for per-node explainability and statistical significance tests for a workshop paper.">
+      <h2>Findings &amp; <span class="accent">Conclusion</span></h2>
+      <div style="flex:1; display:flex; flex-direction:column; gap:9px; width:100%;">
+        <!-- TOP STATS -->
+        <div class="row" style="gap:8px; flex-shrink:0;">
+          <div class="card stat" style="flex:1;"><div class="num accent">0.8265</div><div class="lbl">Best F1 · GBM+Structural</div></div>
+          <div class="card stat" style="flex:1;"><div class="num blue">0.9243</div><div class="lbl">Best AUC · GBM+Structural</div></div>
+          <div class="card stat" style="flex:1;"><div class="num gold">48</div><div class="lbl">Experiments Across 5 Paradigms</div></div>
+          <div class="card stat" style="flex:1;"><div class="num" style="color:var(--purple);">0.407</div><div class="lbl">Best Unsupervised F1 · β-VAE</div></div>
+          <div class="card stat" style="flex:1;"><div class="num" style="color:var(--red);">&lt;0.08</div><div class="lbl">Classical Anomaly Det. F1 ceiling</div></div>
+        </div>
+        <!-- MIDDLE THREE COLUMNS -->
+        <div class="row" style="flex:1; align-items:stretch; gap:9px;">
+          <!-- PARADIGM SUMMARY TABLE -->
+          <div class="col" style="flex:1.2;">
+            <div class="card" style="flex:1; padding:10px 12px;">
+              <h3 style="margin-bottom:7px;">Paradigm Summary</h3>
+              <table style="width:100%;border-collapse:collapse;font-size:0.72rem;">
+                <thead>
+                  <tr style="color:var(--muted);border-bottom:1px solid var(--border2);">
+                    <th style="padding:4px 6px;text-align:left;">Paradigm</th>
+                    <th style="padding:4px 6px;text-align:center;">Best F1</th>
+                    <th style="padding:4px 6px;text-align:left;">Best Model</th>
+                    <th style="padding:4px 6px;text-align:left;">Key Finding</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:5px 6px;color:var(--accent);">GBM Supervised</td>
+                    <td style="padding:5px 6px;text-align:center;font-weight:700;">0.8265</td>
+                    <td style="padding:5px 6px;">GBM + 7 topology</td>
+                    <td style="padding:5px 6px;color:var(--muted);">Structural features add reliable +0.01 F1</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:5px 6px;color:var(--accent2);">GNN</td>
+                    <td style="padding:5px 6px;text-align:center;font-weight:700;">0.698</td>
+                    <td style="padding:5px 6px;">GraphSAGEv2+pseudo</td>
+                    <td style="padding:5px 6px;color:var(--muted);">GAT fails on sparse graph (deg 2.3)</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:5px 6px;color:var(--purple);">Deep AE/VAE</td>
+                    <td style="padding:5px 6px;text-align:center;font-weight:700;">0.407</td>
+                    <td style="padding:5px 6px;">β-VAE (β=0.01)</td>
+                    <td style="padding:5px 6px;color:var(--muted);">AE score must be inverted (−MSE)</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:5px 6px;color:var(--gold);">Graph AE (DOMINANT)</td>
+                    <td style="padding:5px 6px;text-align:center;font-weight:700;">0.212</td>
+                    <td style="padding:5px 6px;">DOMINANT 2-layer</td>
+                    <td style="padding:5px 6px;color:var(--muted);">Best unsupervised graph; AUC=0.669</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:5px 6px;color:var(--red);">Classical Anomaly</td>
+                    <td style="padding:5px 6px;text-align:center;font-weight:700;">&lt;0.08</td>
+                    <td style="padding:5px 6px;">IsoForest/LOF/OCSVM</td>
+                    <td style="padding:5px 6px;color:var(--muted);">Illicit txs not feature-space outliers</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <!-- PITFALLS + WHAT WORKS/FAILS -->
+          <div class="col" style="flex:0.9; gap:9px;">
+            <div class="card ca">
+              <h3>What Works</h3>
+              <ul class="il" style="font-size:.76rem;">
+                <li><span class="ico">🌲</span><strong>GBM + topology features</strong> — labels drive all performance</li>
+                <li><span class="ico">🕸️</span>GraphSAGE 3-layer + LayerNorm + self-loops → best GNN</li>
+                <li><span class="ico">🔀</span>Pseudo-labels: +3.1 F1 for GNN at p≥0.90 threshold</li>
+                <li><span class="ico">📊</span>Temporal split mandatory — random split inflates +5–10 F1</li>
+                <li><span class="ico">🔍</span>SHAP triple-overlap: lf_53, lf_90, af_70 dominate all model families</li>
+              </ul>
+            </div>
+            <div class="card cgo">
+              <h3 style="color:var(--gold);">⚠️ Pitfalls Discovered</h3>
+              <ul class="il" style="font-size:.76rem;">
+                <li><span class="ico">🚫</span><strong>Threshold leakage</strong> → false F1=1.0 on val; many AML papers do this</li>
+                <li><span class="ico">🔄</span><strong>AE score inversion</strong> — illicit txs reconstruct better, not worse</li>
+                <li><span class="ico">📡</span><strong>GAT + sparse graph</strong> — attention collapses at avg degree 2.3</li>
+                <li><span class="ico">📉</span><strong>Spectral clustering</strong> — Fiedler≈2, no anomaly community signal</li>
+              </ul>
+            </div>
+          </div>
+          <!-- FUTURE WORK + PUBLICATION -->
+          <div class="col" style="flex:0.8; gap:9px;">
+            <div class="card" style="flex:0; padding:10px 12px;">
+              <h3 style="margin-bottom:7px;">Future Work</h3>
+              <ul class="il" style="font-size:.74rem;">
+                <li><span class="ico">🔬</span><strong>GNNExplainer</strong> — per-node attribution for flagged transactions</li>
+                <li><span class="ico">📊</span><strong>Bootstrap F1 + McNemar tests</strong> — statistical significance across paradigms</li>
+                <li><span class="ico">🌐</span><strong>DOMINANT longer training</strong> — currently undertrained (150 epochs)</li>
+                <li><span class="ico">🤝</span><strong>Ensemble GBM+GNN</strong> — late fusion probability averaging</li>
+                <li><span class="ico">🕒</span><strong>Temporal GNN</strong> — TGNN / EvolveGCN for concept drift adaptation</li>
+                <li><span class="ico">📝</span><strong>Workshop paper</strong> — KDD/ECML-PKDD Applied DS track; 48-exp benchmark is the contribution</li>
+              </ul>
+            </div>
+            <div class="card cr" style="flex:0; padding:10px 12px;">
+              <h3 style="color:var(--red);margin-bottom:6px;">Core Takeaway</h3>
+              <p style="font-size:.76rem;line-height:1.55;color:var(--text);">Supervised labels are <strong style="color:var(--accent);">indispensable</strong> in blockchain forensics. Illicit transactions mimic licit behavior — they are structurally normal but behaviorally criminal. No amount of unsupervised anomaly detection closes this gap. The 48-experiment benchmark quantifies the gap precisely: <strong>0.40 vs 0.83 F1</strong>, unsupervised vs supervised.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /slides-area -->
+
+  <!-- NOTES STRIP -->
+  <div class="notes-strip" id="notesStrip">
+    <div class="notes-lbl">Speaker Notes</div>
+    <div class="notes-body" id="notesBody"></div>
+  </div>
+
+  <!-- BOTTOM CHROME -->
+  <div class="bottombar">
+    <div style="display:flex;gap:8px;">
+      <button class="nav-btn" onclick="prevSlide()">← Prev</button>
+      <button class="nav-btn" onclick="nextSlide()">Next →</button>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+    <button class="notes-btn" id="notesBtn" onclick="toggleNotes()">📝 Notes</button>
+  </div>
+
+</div><!-- /shell -->
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const TOTAL = slides.length;
+  let cur = 0, notesOpen = false;
+
+  const dotsEl = document.getElementById('dots');
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    dotsEl.appendChild(d);
+  });
+
+  function ui() {
+    document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === cur));
+    document.getElementById('counter').textContent = `${cur + 1} / ${TOTAL}`;
+    document.getElementById('progress').style.width = `${((cur + 1) / TOTAL) * 100}%`;
+    if (notesOpen) document.getElementById('notesBody').textContent = slides[cur].dataset.notes || '';
+  }
+
+  function goTo(n) {
+    if (n === cur || n < 0 || n >= TOTAL) return;
+    slides[cur].classList.remove('active'); slides[cur].classList.add('exit');
+    const p = cur; cur = n;
+    setTimeout(() => slides[p].classList.remove('exit'), 400);
+    slides[cur].classList.add('active');
+    ui();
+  }
+
+  function nextSlide() { goTo(cur + 1); }
+  function prevSlide() { goTo(cur - 1); }
+
+  function toggleNotes() {
+    notesOpen = !notesOpen;
+    document.getElementById('notesStrip').classList.toggle('open', notesOpen);
+    document.getElementById('notesBtn').classList.toggle('on', notesOpen);
+    if (notesOpen) document.getElementById('notesBody').textContent = slides[cur].dataset.notes || '';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight','ArrowDown',' '].includes(e.key)) { e.preventDefault(); nextSlide(); }
+    if (['ArrowLeft','ArrowUp'].includes(e.key))        { e.preventDefault(); prevSlide(); }
+    if (e.key === 'Home') goTo(0);
+    if (e.key === 'End')  goTo(TOTAL - 1);
+    if (e.key === 'n' || e.key === 'N') toggleNotes();
+  });
+
+  let tx = null;
+  document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) dx < 0 ? nextSlide() : prevSlide();
+    tx = null;
+  });
+
+  ui();
+</script>
+</body>
+</html>
