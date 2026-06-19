@@ -160,7 +160,7 @@ def score_transactions(
         print(f"    MEDIUM risk (p >= {MEDIUM_RISK_THRESHOLD}): {n_medium:,}  ({100*n_medium/len(df):.1f}%)")
         print(f"    LOW risk    (p <  {MEDIUM_RISK_THRESHOLD}): {n_low:,}  ({100*n_low/len(df):.1f}%)")
         print(f"\n  Top-10 highest-risk transactions:")
-        print(results.head(10).to_string(index=False))
+        print(results.head(50).to_string(index=False))
 
     return results
 
