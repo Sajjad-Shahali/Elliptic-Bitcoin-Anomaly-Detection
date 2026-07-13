@@ -41,6 +41,8 @@ Detecting illicit Bitcoin transactions using the [Elliptic dataset](https://www.
 
 **Primary metric: F1 on illicit class.** Accuracy is meaningless at 6.5% illicit rate.
 
+> Ranks 1–3 above (0.8265/0.8241/0.8235) are **not statistically distinguishable** — see [Statistical Rigor](#statistical-rigor--publication-readiness) below.
+
 ![Top-15 Leaderboard](reports/final_top15_f1.png)
 
 ### Improvement Journey — 5 Rounds
@@ -74,6 +76,67 @@ Detecting illicit Bitcoin transactions using the [Elliptic dataset](https://www.
 - **Supervised >> Unsupervised** (F1 0.83 vs 0.09) — illicit transactions don't cluster in feature space; supervised labels are essential
 - **Three cross-model robust features:** `lf_53`, `lf_90`, `af_70` rank top-20 in RF (SHAP), GBM (SHAP), and GraphSAGE (gradient attribution)
 - **Concept drift is real** — illicit rate drops 11.6% → 6.5% train→test; random split inflates all metrics
+
+---
+
+## Statistical Rigor & Publication-Readiness
+
+Four checks added on top of the 48-experiment benchmark, aimed at the gaps that keep most Elliptic papers out of rigorous venues (see `Final-report/elliptic_report.tex` §5.7–5.10 and `HANDOFF.md` for full writeups).
+
+### 1. The top-3 ranking is statistical noise
+
+`scripts/statistical_significance.py` — bootstrap F1 95% CI (1,000 resamples) + McNemar's paired test on GBM+Structural (0.8265) vs GBM-Optuna (0.8241) vs GBM+PseudoLabels (0.8235).
+
+| Model | F1 | 95% CI |
+|-------|:--:|:------:|
+| GBM + Structural | 0.8265 | [0.8086, 0.8451] |
+| GBM (Optuna) | 0.8241 | [0.8057, 0.8406] |
+| GBM + PseudoLabels | 0.8235 | [0.8052, 0.8410] |
+
+All three intervals overlap almost entirely; McNemar shows <45 of 16,670 test rows disagree per pair, none significant (p=0.50–1.00). **The 0.827 "best model" claim is a tie, not a ranking** — the real finding is that tabular GBM already sits at its ceiling; neither structural features nor pseudo-labels move it outside sampling noise.
+
+![Bootstrap CI](reports/bootstrap_f1_ci.png)
+
+### 2. SOTA comparison — and a graph-leakage caveat, disclosed
+
+Researched real published Elliptic numbers (Weber 2019, Alarab 2020, Pareja/EvolveGCN, Lo 2023) and a 2026 critical re-evaluation (Maganti, arXiv:2604.19514) showing that **essentially every published Elliptic GNN result — ours included — is "transductive"**: the encoder's message passing sees the full graph, including test-period (steps 35–49) edges, during training; only the classification loss is masked to labeled train nodes. Under a strict-inductive protocol (training message passing restricted to steps ≤34), Maganti reports Random Forest at F1=0.821, beating every GNN tested, and GraphSAGE collapsing from 0.689 (strict-inductive) to 0.294 (transductive) on matched seeds.
+
+Our own `src/gnn.py:train_epoch` has this exact leakage — full graph forward pass, loss-only masking. Disclosed rather than hidden. It doesn't touch our tabular GBM, which uses zero graph exposure and already **exceeds Maganti's strict-inductive RF ceiling** (0.824–0.827 vs 0.821).
+
+![SOTA Comparison](reports/sota_comparison.png)
+
+### 3. A second leakage trap: tuning the threshold on training data
+
+`scripts/threshold_leakage_demo.py` — refits GBM on steps 1–29 only (so 30–34 is genuinely unseen) and compares three threshold-selection protocols against the real test set (steps 35–49):
+
+| Protocol | Threshold | F1 at tune time | Real test F1 |
+|----------|:---------:|:----------------:|:-------------:|
+| Leaky (tune on train) | 0.0050 | **1.0000** | 0.5484 |
+| Correct (tune on held-out val) | 0.3367 | 0.9701 | 0.7670 |
+| Default (t=0.5, no tuning) | 0.5000 | — | **0.7801** |
+
+Tuning on the model's own training predictions collapses the threshold to 0.005 and reports a perfect F1=1.0 — pure overfitting measured against itself, a 0.45 F1 illusion. But even tuning on genuinely held-out val isn't drift-free: val's illicit rate (16.8%) is closer to train's than to test's post-drift rate (6.5%), so its 0.97 tune-time F1 still overstates the real 0.767. The untuned default threshold actually wins on real test F1 (0.78) — under concept drift, a threshold tuned on any pre-drift data can transfer worse than no tuning at all.
+
+![Threshold Leakage Demo](reports/threshold_leakage_demo.png)
+
+### 4. Runtime is real, GraphSAGE's number needs a caveat too
+
+`scripts/runtime_benchmark.py`, measured on RTX 5070 Ti:
+
+| Model | ms/tx | Note |
+|-------|:-----:|------|
+| GBM Optuna | 0.0071 | CPU, `predict_proba` |
+| GBM + Structural (model only) | 0.0076 | CPU |
+| GBM + Structural (+ uncached graph features) | 0.0299 | one-time graph pass, not cached |
+| GraphSAGEv2 | 0.0002 | **batch-amortized** — one forward pass scores all 203,769 nodes at once (~45ms total); not the true cost of scoring one new transaction online, which needs k-hop neighborhood assembly first |
+
+![Runtime Benchmark](reports/runtime_benchmark.png)
+
+### 5. Error analysis: GBM's misses trace to a real external event
+
+`scripts/error_analysis.py` on GBM-Optuna test predictions (TP=787, FN=296, FP=40, TN=15,547 — precision 0.952, recall 0.727). FN rate is 0–35% for steps 35–42, then **jumps to 92–100% for steps 43–49** — coinciding with a documented dark-market shutdown at step 43 that also explains the 11.6%→6.5% concept drift. Misses are confidently wrong (mean P(illicit)=0.014, 95.6% scored <0.10) — not borderline, so threshold tuning won't fix it; needs concept-drift retraining. The three cross-model robust features (`lf_53`, `lf_90`, `af_70`) separate FN from TP at p<1e-24 — missed post-shutdown illicit transactions numerically mimic the licit population on the model's most-trusted signals.
+
+![Error Analysis](reports/error_analysis.png)
 
 ---
 
@@ -306,7 +369,12 @@ These three features rank top-20 regardless of model family — strongest consis
 │   ├── probability_calibration.py       # Platt + isotonic calibration (Round 5)
 │   ├── temporal_rolling_features.py     # rolling mean/std features (Round 5)
 │   ├── lgbm_xgboost_structural.py       # LightGBM/XGBoost on structural features
-│   └── final_leaderboard.py             # full leaderboard table + 3 comparison plots
+│   ├── final_leaderboard.py             # full leaderboard table + 3 comparison plots
+│   ├── statistical_significance.py      # bootstrap F1 CI + McNemar test, top-3 models
+│   ├── runtime_benchmark.py             # per-transaction inference latency (GBM/GraphSAGE)
+│   ├── error_analysis.py                # FN/FP breakdown, temporal + feature-level
+│   ├── threshold_leakage_demo.py        # threshold-on-train vs threshold-on-val leakage demo
+│   └── significance_plots.py            # plots for the significance/SOTA/runtime items
 │
 ├── models/                      # saved weights
 │   ├── scaler.joblib · scaler_graph_features.joblib · scaler_structural.joblib
@@ -327,7 +395,12 @@ These three features rank top-20 regardless of model family — strongest consis
 │   ├── cm_DOMINANT.png · cm_Ensemble.png · pr_curves.png
 │   ├── shap_rf_bar.png · shap_rf_beeswarm.png · shap_gbm_bar.png
 │   ├── gnn_experiments_progression.png · gnn_experiments_radar.png
-│   └── gnn_gradient_attribution.png
+│   ├── gnn_gradient_attribution.png
+│   ├── bootstrap_f1_ci.csv/.png · mcnemar_results.csv · mcnemar_agreement.png
+│   ├── sota_comparison.png
+│   ├── runtime_benchmark.csv/.png
+│   ├── error_analysis_summary.csv · error_analysis_features.csv · error_analysis.png
+│   └── threshold_leakage_demo.csv/.png
 │
 └── data/                        # gitignored — run download_data.py
 ```
@@ -477,3 +550,6 @@ results = score_from_csv(
 - Higgins, I. et al. (2017). [beta-VAE: Learning Basic Visual Concepts with a Constrained Variational Framework](https://openreview.net/forum?id=Sy2fchgkl). ICLR. (β-VAE)
 - Lundberg, S. & Lee, S. (2017). [A Unified Approach to Interpreting Model Predictions](https://arxiv.org/abs/1705.07874). NeurIPS. (SHAP)
 - Akiba, T. et al. (2019). [Optuna: A Next-generation Hyperparameter Optimization Framework](https://arxiv.org/abs/1907.10902). KDD.
+- Pareja, A. et al. (2020). [EvolveGCN: Evolving Graph Convolutional Networks for Dynamic Graphs](https://arxiv.org/abs/1902.10191). AAAI.
+- Alarab, I., Prakoonwit, S., & Nacer, M. I. (2020). Competence of Graph Convolutional Networks for Anti-Money Laundering in Bitcoin Blockchain. ICMLSC.
+- Maganti, S. (2026). [When Graph Structure Becomes a Liability: A Critical Re-Evaluation of GNNs for Bitcoin Fraud Detection under Temporal Distribution Shift](https://arxiv.org/abs/2604.19514). arXiv:2604.19514.

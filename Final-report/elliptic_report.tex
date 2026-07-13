@@ -29,9 +29,16 @@ A 48-Experiment Benchmark on the Elliptic Bitcoin Dataset}
 \author{
   \IEEEauthorblockN{Sajjad Shahali Ramsheh}
   \IEEEauthorblockA{
-    \textit{Department of Control and Computer Engineering (DAUIN)}\\
+    \textit{Dept. of Control and Computer Engineering (DAUIN)}\\
     Politecnico di Torino, Turin, Italy\\
     s340464@studenti.polito.it
+  }
+  \and
+  \IEEEauthorblockN{Giovanni Barbarani \textit{(Teaching Assistant)}}
+  \IEEEauthorblockA{
+    \textit{Dept. of Mathematical Sciences (DISMA)}\\
+    Politecnico di Torino, Turin, Italy\\
+    giovanni.barbarani@polito.it
   }
 }
 
@@ -138,6 +145,22 @@ detectors.
 GraphSAGE; Velickovic et al.~\cite{velickovic2018} proposed GAT; Brody et
 al.~\cite{brody2022} fixed GAT's expressivity with GATv2.  Pareja et
 al.~\cite{pareja2020evolve} extended GCN to dynamic graphs (EvolveGCN).
+Alarab et al.~\cite{alarab2020} report an augmented GCN at F1~=~0.74 on
+Elliptic; reported EvolveGCN and self-supervised GraphSAGE results reach
+F1~=~0.75--0.77 (see Table~\ref{tab:sota} and \S\ref{sec:leakage}).
+
+\textbf{Graph-leakage critique.}  Maganti~\cite{maganti2026} re-evaluates
+GNNs on Elliptic under a \emph{strict-inductive} protocol (training message
+passing restricted to steps~$\leq$34, mirroring deployment) versus the
+\emph{transductive} protocol used by essentially all prior Elliptic papers,
+where the encoder's forward pass sees the full graph -- including
+test-period (steps~35--49) edges and nodes -- at every training step, and
+only the loss is masked to labeled train nodes. Matched-seed GraphSAGE
+scores F1~=~0.294 transductive vs.\ F1~=~0.689 strict-inductive, a
+39.5-point gap ($p{=}2.6\times10^{-12}$); under the strict-inductive
+protocol, Random Forest on raw features (F1~=~0.821) beats every GNN
+tested. \S\ref{sec:leakage} discusses this critique in the context of our
+own GNN training protocol.
 
 \textbf{Graph anomaly detection.}  Ding et al.~\cite{ding2019dominant}
 proposed DOMINANT, a GCN autoencoder that jointly reconstructs node attributes
@@ -173,6 +196,7 @@ probability.
 \section{Dataset and Methodology}
 
 \subsection{Dataset}
+\label{sec:dataset}
 
 \begin{table}[htbp]
 \centering
@@ -609,6 +633,7 @@ not be generalized beyond mean-aggregation architectures at this scale.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Hyperparameter Tuning (Optuna)}
+\label{sec:optuna}
 
 \begin{table}[htbp]
 \centering
@@ -750,7 +775,296 @@ supervised ceiling.  GBM and GraphSAGEv2 exploit different, complementary
 channels (tabular features vs.\ topology).
 
 % ─────────────────────────────────────────────────────────────────────────────
+\subsection{Statistical Significance of the Top-3 Ranking}
+\label{sec:significance}
+
+The top three models (GBM+Structural F1~=~0.8265, GBM Optuna F1~=~0.8241,
+GBM+PseudoLabels F1~=~0.8235) span only 0.0030 F1 -- within the noise floor
+of a single 16{,}670-row temporal test fold. We quantify this with (i)
+bootstrap 95\,\% confidence intervals on F1 (1{,}000 resamples,
+\texttt{scripts/statistical\_significance.py}) and (ii) McNemar's paired
+test on the disagreeing predictions between each pair of models.
+
+\begin{table}[htbp]
+\centering
+\caption{Bootstrap F1 95\,\% CI, Top-3 Models (1{,}000 resamples)}
+\label{tab:bootstrap}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Model & F1 & 95\,\% CI & Std \\
+\midrule
+GBM + Structural   & 0.8265 & [0.8086, 0.8451] & 0.0093 \\
+GBM (Optuna)       & 0.8241 & [0.8057, 0.8406] & 0.0092 \\
+GBM + PseudoLabels & 0.8235 & [0.8052, 0.8410] & 0.0093 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All three intervals overlap almost entirely ($\pm$0.018 half-width against a
+0.003 point-estimate spread), so the reported ranking is not statistically
+distinguishable from a tie.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{bootstrap_f1_ci.png}
+  \caption{Bootstrap 95\,\% F1 confidence intervals, top-3 models. The
+           shaded band is the union of all three intervals -- near-total
+           overlap visually confirms the tie.}
+  \label{fig:bootstrap}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{McNemar's Test, Pairwise (test set, $n{=}16{,}670$)}
+\label{tab:mcnemar}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Model A vs.\ Model B & $b$ & $c$ & $p$-value & Sig.\ ($\alpha{=}0.05$) \\
+\midrule
+Structural vs.\ Optuna       & 12 & 8  & 0.503 & no \\
+Structural vs.\ PseudoLabels & 22 & 21 & 1.000 & no \\
+Optuna vs.\ PseudoLabels     & 19 & 22 & 0.755 & no \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+$b$ and $c$ count test rows where exactly one model is correct (McNemar
+ignores the $\sim$16{,}600 rows both models agree on). All three pairs
+disagree on fewer than 45 of 16{,}670 rows, and none reach significance.
+\textbf{Conclusion: the observed 0.827/0.824/0.824 ordering is statistical
+noise, not a genuine ranking.} The paper's actionable claim is narrower than
+"structural features help": it is that GBM on 165 tabular features already
+sits at the model family's ceiling on this dataset, and neither 7 topology
+features nor pseudo-labels move it outside sampling variance. This
+reframing matters for the paper's novelty argument (\S\ref{sec:discussion}):
+claiming a new state of the art on a 0.003 F1 delta without this test would
+be a common but avoidable rigor gap in the AML literature.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{mcnemar_agreement.png}
+  \caption{McNemar disagreement counts, pairwise. Bars are the rows where
+           exactly one model is correct ($b$, $c$); annotated $p$-values are
+           all $\gg$0.05.}
+  \label{fig:mcnemar}
+\end{figure}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Comparison to Published SOTA and a Graph-Leakage Caveat}
+\label{sec:leakage}
+
+Table~\ref{tab:sota} positions this work's best results against published
+F1 scores on Elliptic. Two evaluation regimes appear in the literature and
+must not be compared directly: \emph{transductive} (the GNN encoder's
+message passing observes the full graph, including test-period edges,
+during training; only the classification loss is masked to train-labeled
+nodes) and \emph{strict-inductive} (training message passing restricted to
+the steps~$\leq$34 subgraph). Essentially all published Elliptic GNN
+results (Weber, Alarab, Pareja, Lo) are transductive.
+
+\begin{table}[htbp]
+\centering
+\caption{Published F1 on Elliptic (Illicit Class) vs.\ This Work}
+\label{tab:sota}
+\renewcommand{\arraystretch}{1.1}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}llrl@{}}
+\toprule
+Model & Protocol & F1 & Source \\
+\midrule
+Logistic Regression         & temporal, transductive & 0.481 & Weber et al.~\cite{weber2019} \\
+GCN                         & temporal, transductive & 0.628 & Weber et al.~\cite{weber2019} \\
+Skip-GCN                    & temporal, transductive & 0.705 & Weber et al.~\cite{weber2019} \\
+Random Forest               & temporal                & 0.788 & Weber et al.~\cite{weber2019} \\
+Augmented GCN                & temporal, transductive & 0.740 & Alarab et al.~\cite{alarab2020} \\
+GraphSAGE + SSL pretrain     & temporal, transductive & 0.750 & Lo et al.\ 2023 (via~\cite{maganti2026}) \\
+EvolveGCN                    & temporal, transductive & 0.770 & Pareja et al.\ (via~\cite{maganti2026}) \\
+GraphSAGE                    & transductive            & 0.294 & Maganti~\cite{maganti2026} \\
+Random Forest                & \textbf{strict-inductive} & 0.821 & Maganti~\cite{maganti2026} \\
+GraphSAGE                    & \textbf{strict-inductive} & 0.689 & Maganti~\cite{maganti2026} \\
+\midrule
+Random Forest (ours)         & temporal, non-graph     & 0.801 & this work \\
+GBM Optuna (ours)            & temporal, non-graph     & 0.824 & this work \\
+GBM + Structural (ours)      & temporal, non-graph$^\ast$ & 0.827 & this work \\
+GraphSAGEv2 (ours)           & temporal, transductive$^\dagger$ & 0.698 & this work \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{sota_comparison.png}
+  \caption{Published Elliptic F1 by evaluation protocol. Grey = prior
+           transductive results; green = prior strict-inductive
+           (leakage-free) results; blue = this work's non-graph models
+           (no leakage possible); red = this work's transductive GraphSAGEv2.}
+  \label{fig:sota}
+\end{figure}
+{\small $^\ast$structural features are 7 topology scalars per node (degree,
+clustering, etc.), not message-passed representations -- no leakage
+mechanism applies. $^\dagger$our GraphSAGE/GraphSAGEv2/GAT/DOMINANT training
+(\texttt{src/gnn.py:train\_epoch}) runs the encoder forward pass over the
+full graph object every step and masks only the loss to \texttt{train\_mask}
+-- the same transductive protocol as prior Elliptic literature.}
+
+\textbf{This is a limitation, disclosed rather than hidden.} Our
+GraphSAGEv2 F1~=~0.698 is not directly comparable to Maganti's
+strict-inductive Random Forest (0.821) or strict-inductive GraphSAGE
+(0.689) -- it sits in the transductive regime, alongside Weber/Alarab/Lo/Pareja.
+Two observations soften the concern. First, our non-graph GBM (F1~=~0.824--0.827,
+\S\ref{sec:significance}) is trained and evaluated with zero graph exposure
+of any kind (tabular features only, or 7 pre-computed topology scalars,
+never encoder message passing), so it carries none of this leakage risk --
+and it already exceeds Maganti's strict-inductive Random Forest ceiling
+(0.821), which is the most rigorous non-GNN number in the comparison.
+Second, Maganti's own strict-inductive GraphSAGE (0.689) lands almost
+exactly on our transductive GraphSAGEv2 (0.698), suggesting the leakage
+inflation for GraphSAGE specifically may be smaller than the 39.5-point
+GraphSAGE-vs-itself gap implies once architecture (3-layer, LayerNorm,
+self-loops) and hyperparameters differ across studies -- but re-running our
+GNN suite under a strict-inductive protocol is unverified future work, not
+a claim made here.
+
+\textbf{Net position:} the paper's strongest, leakage-free number is the
+tabular GBM at F1~=~0.824--0.827, which is competitive with or exceeds
+every reported Elliptic result in Table~\ref{tab:sota} including the
+strict-inductive Random Forest ceiling -- without touching the graph at
+all. This reframes RQ2's answer (\S\ref{sec:leakage} above): graph
+structure adds real but modest signal on top of an already-strong tabular
+baseline, and any GNN number reported without stating its train-time
+message-passing protocol (ours included, prior to this caveat) should be
+treated as provisional.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{A Second Leakage Trap: Threshold Tuning on Training Data}
+\label{sec:threshold-leakage}
+
+Beyond encoder-level graph leakage (\S\ref{sec:leakage}), a second and
+distinct leakage mode is common in AML threshold-selection practice:
+picking the decision threshold by maximizing F1 on the model's \emph{own
+training predictions} rather than on genuinely held-out data.
+\texttt{scripts/threshold\_leakage\_demo.py} reproduces this directly. We
+refit GBM (same tuned hyperparameters as \S\ref{sec:optuna}) on steps~1--29
+only -- so that steps~30--34 are \emph{never} seen during fitting and can
+serve as a truly held-out validation slice, unlike the main pipeline where
+"val" (steps~30--34) is a subset of the full 1--34 training fit.
+
+\begin{table}[htbp]
+\centering
+\caption{Threshold Tuning Protocol vs.\ Real Test F1}
+\label{tab:threshold-leakage}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Protocol & Threshold & F1 at tune time & Real test F1 \\
+\midrule
+Leaky (tune on train)     & 0.0050 & \textbf{1.0000} & 0.5484 \\
+Correct (tune on val)     & 0.3367 & 0.9701          & 0.7670 \\
+Default ($t{=}0.5$, no tuning) & 0.5000 & --          & \textbf{0.7801} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{threshold_leakage_demo.png}
+  \caption{Left: F1-vs-threshold curves on the tuning set for each
+           protocol; the leaky curve is tuned on training data the model
+           has already fit, the correct curve on genuinely unseen
+           steps~30--34. Right: F1 reported at tune time vs.\ the real
+           test F1 each threshold choice actually achieves.}
+  \label{fig:threshold-leakage}
+\end{figure}
+
+\textbf{The leaky protocol collapses the threshold to 0.005 and reports a
+perfect F1~=~1.0 -- a model that appears flawless on paper achieves only
+F1~=~0.5484 on the real test set, a 0.45 F1 illusion.} A boosted-tree
+ensemble with $n{=}245$, depth~8 fits its own training set almost
+perfectly (predicted probabilities cluster near 0 or 1 for training rows),
+so nearly any threshold above the score floor separates the training
+classes with F1 near 1 -- this is pure overfitting measured against
+itself, not a discovered decision rule.
+
+\textbf{Even the "correct" protocol is not free of drift-driven
+optimism.} Tuning on the genuinely held-out val slice (steps~30--34)
+avoids self-fit leakage but still reports F1~=~0.9701 at tune time against
+a real test F1 of 0.7670 (0.20 gap) -- because val's illicit rate
+(16.8\,\%) is closer to train's (10.9\,\%) than to test's post-drift rate
+(6.5\,\%, \S\ref{sec:dataset}). Notably, the untuned default threshold
+($t{=}0.5$) achieves the \emph{best} real test F1 of the three
+(0.7801) -- under severe concept drift, a threshold optimized on any
+pre-drift data (train or val) can transfer worse than no tuning at all.
+This is the sharper, more general version of the finding: it is not
+merely that self-tuning on train is wrong (obviously so), but that
+\emph{any} threshold selection under temporal distribution shift should
+be validated against a slice that matches the deployment regime as
+closely as possible, and its transfer gap (tune-time F1 minus real
+test F1) should always be reported alongside the threshold itself. Papers
+that report only a tuned F1 without this gap -- common practice across the
+AML literature we surveyed in \S\ref{sec:leakage} -- cannot be taken at
+face value.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Inference Runtime and Scalability}
+\label{sec:runtime}
+
+For production AML screening, throughput matters as much as F1: a
+transaction-monitoring pipeline scores every incoming transaction, so
+per-transaction latency sets a hard ceiling on volume.
+\texttt{scripts/runtime\_benchmark.py} measures batch-amortized inference
+time on the same 16{,}670-row temporal test set, GPU~=~RTX~5070~Ti
+(GraphSAGEv2 only; GBM is CPU/sklearn).
+
+\begin{table}[htbp]
+\centering
+\caption{Inference Latency (batch-amortized, ms/transaction)}
+\label{tab:runtime}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Model & ms/tx & Notes \\
+\midrule
+GBM Optuna (165 feat)         & 0.0071 & \texttt{predict\_proba}, CPU \\
+GBM+Structural, model only    & 0.0076 & \texttt{predict\_proba}, CPU \\
+GBM+Structural, incl.\ graph feat.\ & 0.0299 & +7-feature graph pass, no cache \\
+GraphSAGEv2                   & 0.0002 & full-graph forward, batched, GPU \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{runtime_benchmark.png}
+  \caption{Inference latency by model, log scale. All four models score
+           well under 1\,ms/tx in batch mode; differences span two orders
+           of magnitude.}
+  \label{fig:runtime}
+\end{figure}
+
+Both tree models score in single-digit microseconds per transaction --
+16{,}670 rows classify in $\approx$0.12\,s total, no GPU required.
+GraphSAGEv2's 0.0002\,ms/tx figure is the batched cost of one forward pass
+scoring all 203{,}769 graph nodes simultaneously ($\approx$45\,ms total,
+median of 20 runs); it is \emph{not} the cost of scoring one new
+transaction online. In a streaming deployment, a single incoming
+transaction requires materializing its $k$-hop neighborhood subgraph before
+the forward pass can run -- an operation this benchmark does not isolate
+and which scales with local graph density, not dataset size. The
+structural-feature graph pass (degree, clustering, ego-density, OddBall)
+for GBM+Structural took 4.55\,s for the full 203{,}769-node graph
+(0.022\,ms/tx amortized); like GraphSAGE's neighborhood assembly, this is a
+whole-graph operation that would need incremental/cached updates rather
+than full recomputation per scoring pass in production. \textbf{Practical
+takeaway:} the tabular GBM is the only model here with a genuinely
+O(1)-per-transaction production cost; both graph-aware models carry a
+graph-maintenance cost that this benchmark surfaces but does not fully
+characterize for online (one-transaction-at-a-time) serving.
+
+% ─────────────────────────────────────────────────────────────────────────────
 \subsection{Explainability}
+\label{sec:explain}
 
 \begin{table}[htbp]
 \centering
@@ -813,7 +1127,69 @@ semantics via Elliptic collaboration is the primary open question.
 \end{figure}
 
 % ─────────────────────────────────────────────────────────────────────────────
+\subsection{Error Analysis: What GBM Misses}
+\label{sec:error}
+
+We break down GBM (Optuna, tabular-only) test predictions into
+TP/FP/FN/TN (\texttt{scripts/error\_analysis.py}) to characterize the
+296 illicit transactions it misses (recall~=~0.727, precision~=~0.952 at
+the default 0.5 threshold -- precision is high; false negatives, not false
+alarms, are the dominant error mode).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{error_analysis.png}
+  \caption{Left: false-negative rate by test time step. Middle: predicted
+           probability distribution, true positives vs.\ false negatives.
+           Right: graph degree, true positives vs.\ false negatives.}
+  \label{fig:error}
+\end{figure}
+
+\textbf{Misses concentrate almost entirely after the step-43 regime
+change.} FN rate is 0--35\,\% for steps~35--42, then jumps to
+92--100\,\% for steps~43--45 and~47--49 (step~46 has only 2 illicit
+nodes). This step-43 boundary coincides with a real external event: prior
+work on the Elliptic dataset attributes a documented dark-market shutdown
+at step~43 to the sharp illicit-rate collapse (11.6\,\%$\to$6.5\,\%,
+falling as low as 0.3\,\% by step~46) that defines our train/test split
+(\S\ref{sec:leakage}). GBM was trained on steps~1--34, before this event;
+the illicit transactions it fails to catch afterward likely reflect a
+\emph{different laundering typology} than the templated pre-shutdown
+patterns the model learned, not a generic recall weakness.
+
+\textbf{Misses are confidently wrong, not borderline.} FN mean predicted
+probability is 0.014 (median~0.000); 95.6\,\% of FN are scored below 0.10,
+and only 2.0\,\% sit above the 0.3 "would-flag-under-a-lower-threshold"
+zone. Lowering the decision threshold would recover almost none of these
+296 transactions -- the model is not narrowly missing them near the
+boundary, it has learned that they resemble the licit class. This rules
+out threshold recalibration as a fix and points instead to concept-drift
+retraining or online learning as the correct remediation.
+
+\textbf{Graph degree is a statistically significant but practically weak
+signal.} FN median degree (1.0) equals TP median degree (1.0); means
+differ narrowly (1.80 vs.\ 2.01, Mann-Whitney $p{=}0.0053$). The
+significance is a large-$n$ artifact, not a usable operational signal --
+missed illicit transactions are not meaningfully more isolated in the
+graph than caught ones, which is consistent with \S\ref{sec:leakage}'s
+finding that graph topology adds only modest signal on this dataset.
+
+\textbf{The three cross-paradigm robust features separate FN from TP.}
+\texttt{lf\_53} (FN mean~$-0.485\to0.246$ relative shift toward the licit
+population, $p{=}3\times10^{-125}$), \texttt{lf\_90}
+($p{=}2\times10^{-140}$), and \texttt{af\_70} ($p{=}3\times10^{-24}$) all
+differ significantly between FN and TP, with FN values consistently closer
+to the licit population's typical range. This is the mechanistic
+explanation for the misses: the post-shutdown illicit transactions do not
+just evade the decision boundary by chance, they numerically resemble
+licit transactions on exactly the three features SHAP and gradient
+attribution identify as most discriminative overall
+(\S\ref{sec:explain}), i.e.\ the new laundering typology mimics licit
+behavior on the model's most-trusted signals.
+
+% ─────────────────────────────────────────────────────────────────────────────
 \section{Discussion}
+\label{sec:discussion}
 
 \textbf{RQ1 --- Density failure.}
 All classical detectors score below F1~=~0.076.  Illicit transactions are
@@ -975,6 +1351,16 @@ in streams with extreme value theory,'' \textit{KDD}, 2017.
 \bibitem{lee2013pseudo}
 D.-H.~Lee, ``Pseudo-label: The simple and efficient semi-supervised learning
 method for deep neural networks,'' \textit{ICML Workshop}, 2013.
+
+\bibitem{alarab2020}
+I.~Alarab, S.~Prakoonwit, and M.~I.~Nacer, ``Competence of graph
+convolutional networks for anti-money laundering in Bitcoin blockchain,''
+\textit{ICMLSC}, 2020.
+
+\bibitem{maganti2026}
+S.~Maganti, ``When graph structure becomes a liability: A critical
+re-evaluation of graph neural networks for Bitcoin fraud detection under
+temporal distribution shift,'' \textit{arXiv:2604.19514}, 2026.
 
 \end{thebibliography}
 

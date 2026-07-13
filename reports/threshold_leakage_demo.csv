@@ -1,0 +1,4 @@
+protocol,tuned_on,threshold,f1_at_tune_time,real_test_f1
+leaky_train_self_tune,train (1-29),0.005025125628140704,1.0,0.5483870967741935
+correct_held_out_val,val (30-34),0.33668341708542715,0.9701110162254484,0.7670043415340086
+default_0.5,--,0.5,,0.7800788954635108
