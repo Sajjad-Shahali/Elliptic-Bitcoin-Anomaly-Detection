@@ -115,7 +115,8 @@ model.eval()
 data = data.to(DEVICE)
 
 with torch.no_grad():
-    _ = model(data.x, data.edge_index)  # warm-up
+    for _ in range(5):  # extra warm-up: PyG pure-python fallback + CUDA JIT settle
+        _ = model(data.x, data.edge_index)
     if DEVICE.type == "cuda":
         torch.cuda.synchronize()
     times = []
@@ -127,9 +128,11 @@ with torch.no_grad():
         times.append(time.perf_counter() - t0)
 times = np.array(times)
 n_scored = data.num_nodes
-sage_ms = 1000 * times.mean() / n_scored
-print(f"  Full graph: {n_scored:,} nodes  total={times.mean()*1000:.2f}ms (+/-{times.std()*1000:.2f})  "
-      f"=> {sage_ms:.5f} ms/tx (amortized -- single forward pass scores all nodes at once)")
+print(f"  Per-call times (ms): {np.round(times*1000, 2).tolist()}")
+med_s = np.median(times)
+sage_ms = 1000 * med_s / n_scored
+print(f"  Full graph: {n_scored:,} nodes  median={med_s*1000:.2f}ms  mean={times.mean()*1000:.2f}ms (+/-{times.std()*1000:.2f}, outlier-skewed)  "
+      f"=> {sage_ms:.5f} ms/tx (median, amortized -- single forward pass scores all nodes at once)")
 
 print("\n=== Runtime Summary (ms/transaction) ===")
 print(f"  GBM Optuna (tabular)              : {gbm_ms:.5f} ms/tx")
