@@ -1,0 +1,19 @@
+.venv/
+data/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+/course summery
+/.vscode
+/uploaded
+.gitattributes
+*.zip
+Final-report/elliptic_report.log
+Final-report/elliptic_report.aux
+Final-report/elliptic_report.out
+Final-report/exam old sample.pdf
+Final-report/elliptic_report_text_for_humanizer.txt
+Final-report/elliptic_report - final claude version.pdf
+Final-report/elliptic_report - final claude version.tex
+Final-report/humnized.txt
+texput.log

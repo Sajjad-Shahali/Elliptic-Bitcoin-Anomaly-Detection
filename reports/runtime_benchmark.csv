@@ -1,0 +1,5 @@
+model,ms_per_tx,std_ms_per_tx,note
+GBM-Optuna,0.007572140671735591,0.0005014793871629022,"tabular, 165 feat"
+GBM+Structural (model only),0.008240971805585213,0.0011251163480636038,172 feat
+"GBM+Structural (incl. graph feat, no cache)",0.03808684580995675,0.0011251163480636038,one-time graph feature cost amortized over all nodes
+GraphSAGEv2,12.51748775059012,,"full-graph forward pass amortized over 203,769 nodes, cuda"

@@ -1,0 +1,4 @@
+model_a,model_b,b,c,statistic,p_value,significant_0.05
+GBM+Structural,GBM-Optuna,12,8,,0.5034446716308594,False
+GBM+Structural,GBM+PseudoLabels,22,21,0.0,1.0,False
+GBM-Optuna,GBM+PseudoLabels,19,22,0.0975609756097561,0.7547764265871045,False
