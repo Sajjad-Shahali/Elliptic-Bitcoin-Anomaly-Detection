@@ -1,0 +1,6 @@
+D:\hachaton\Elliptic-Bitcoin-Anomaly-Detection\.venv\Lib\site-packages\torch_geometric\__init__.py:4: UserWarning: An issue occurred while importing 'pyg-lib'. Disabling its usage. Stacktrace: Could not load this library: D:\hachaton\Elliptic-Bitcoin-Anomaly-Detection\.venv\Lib\site-packages\libpyg.pyd
+  import torch_geometric.typing
+D:\hachaton\Elliptic-Bitcoin-Anomaly-Detection\.venv\Lib\site-packages\torch_geometric\__init__.py:4: UserWarning: An issue occurred while importing 'torch-scatter'. Disabling its usage. Stacktrace: Could not load this library: D:\hachaton\Elliptic-Bitcoin-Anomaly-Detection\.venv\Lib\site-packages\torch_scatter\_version_cuda.pyd
+  import torch_geometric.typing
+D:\hachaton\Elliptic-Bitcoin-Anomaly-Detection\.venv\Lib\site-packages\torch_geometric\__init__.py:4: UserWarning: An issue occurred while importing 'torch-sparse'. Disabling its usage. Stacktrace: Could not load this library: D:\hachaton\Elliptic-Bitcoin-Anomaly-Detection\.venv\Lib\site-packages\torch_sparse\_version_cuda.pyd
+  import torch_geometric.typing
