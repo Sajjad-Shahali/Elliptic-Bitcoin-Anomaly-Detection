@@ -134,3 +134,66 @@ def score_timesteps(model: LSTMAE, step_means: np.ndarray, window_size: int = 10
         step_counts[i : i + window_size] += 1.0
 
     return step_scores / np.maximum(step_counts, 1.0)
+
+
+@torch.no_grad()
+def reconstructed_step_vectors(model: LSTMAE, step_means: np.ndarray, window_size: int = 10) -> np.ndarray:
+    """
+    Per-timestep reconstruction template: average decoded feature vector for that step
+    over every window containing it (same window-averaging scheme as score_timesteps,
+    but keeps the full reconstructed vector instead of collapsing it to a scalar MSE).
+
+    This template is what turns a step-level score into a genuine per-transaction score:
+    each transaction is compared against ITS step's learned "normal" template, not against
+    a single scalar shared by every transaction in that step.
+    """
+    model.eval()
+    n_steps, input_dim = step_means.shape
+    recon_sum   = np.zeros((n_steps, input_dim))
+    recon_count = np.zeros(n_steps)
+
+    X = torch.tensor(step_means, dtype=torch.float32)
+    for i in range(n_steps - window_size + 1):
+        window = X[i : i + window_size].unsqueeze(0).to(DEVICE)
+        recon, _ = model(window)
+        recon_np = recon.squeeze(0).cpu().numpy()
+        recon_sum[i : i + window_size] += recon_np
+        recon_count[i : i + window_size] += 1.0
+
+    # steps never covered by any window (shouldn't happen for n_steps >= window_size,
+    # but guard anyway) fall back to the nearest covered step's template
+    uncovered = recon_count == 0
+    if uncovered.any():
+        covered_idx = np.where(~uncovered)[0]
+        for i in np.where(uncovered)[0]:
+            nearest = covered_idx[np.argmin(np.abs(covered_idx - i))]
+            recon_sum[i] = recon_sum[nearest] / recon_count[nearest]
+            recon_count[i] = 1.0
+
+    return recon_sum / recon_count[:, None]
+
+
+def score_transactions_per_tx(
+    model: LSTMAE,
+    df_scaled,
+    feature_cols: list,
+    step_means: np.ndarray,
+    step_ids: list,
+    window_size: int = 10,
+) -> np.ndarray:
+    """
+    Per-transaction anomaly score: MSE between a transaction's own feature vector and
+    its time step's LSTM-AE reconstructed template (see reconstructed_step_vectors).
+
+    Replaces the step-level score_timesteps (which assigns every transaction in a step
+    the SAME scalar) with a genuine per-transaction score, while reusing the identical
+    trained model — no architecture change.
+
+    Returns an array aligned with df_scaled's row order.
+    """
+    templates = reconstructed_step_vectors(model, step_means, window_size)
+    step_to_template = {t: templates[i] for i, t in enumerate(step_ids)}
+
+    X = df_scaled[feature_cols].values.astype(np.float32)
+    template_matrix = np.stack([step_to_template[t] for t in df_scaled["time_step"].values])
+    return ((X - template_matrix) ** 2).mean(axis=1)

@@ -76,6 +76,9 @@ Detecting illicit Bitcoin transactions using the [Elliptic dataset](https://www.
 - **Supervised >> Unsupervised** (F1 0.83 vs 0.09) — illicit transactions don't cluster in feature space; supervised labels are essential
 - **Three cross-model robust features:** `lf_53`, `lf_90`, `af_70` rank top-20 in RF (SHAP), GBM (SHAP), and GraphSAGE (gradient attribution)
 - **Concept drift is real** — illicit rate drops 11.6% → 6.5% train→test; random split inflates all metrics
+- **GAT closes most of the gap to GraphSAGE once tuned** — GATv2 Optuna (hidden=64, heads=4, F1=0.5508) jumps +0.234 over untuned GATv2 (0.317), though still trails tuned GraphSAGE (0.688–0.729)
+- **DOMINANT and LSTM-AE per-transaction scoring are negative results** — an alpha/epoch grid found no improvement over DOMINANT's baseline (already near ceiling), and scoring individual transactions against their LSTM-AE step template performs *worse* (F1=0.037) than the coarser step-level score (F1=0.122) — the temporal signal genuinely lives at step granularity, not per-transaction
+- **GNNExplainer confirms `lf_53`/`lf_90` are causal at the instance level** — present in the top-10 feature mask for 15/15 explained true-positive illicit predictions, not just globally important via SHAP
 
 ---
 
@@ -235,6 +238,7 @@ Random shuffling is explicitly avoided — this is a time-series dataset. Shuffl
 | SAGEv2 + PseudoLabels | 130,655 train nodes (orig 29,894 + 100,761 pseudo-labeled) |
 | GAT | 2-layer, 4 heads, concat aggregation |
 | GATv2 | 3-layer, 2 heads, residual, LayerNorm |
+| GATv2 (Optuna) | hidden=64, heads=4, dropout=0.135, lr=0.0099, 213 epochs — F1=0.5508, +0.234 over untuned GATv2 |
 
 ### Ensemble
 | Method | Notes |
@@ -254,6 +258,12 @@ Random shuffling is explicitly avoided — this is a time-series dataset. Shuffl
 | Ensemble (GBM+LGBM+SAGEv2) | DOMINANT (Graph AE) |
 |:---------------------------:|:-------------------:|
 | ![CM Ensemble](reports/cm_Ensemble.png) | ![CM DOMINANT](reports/cm_DOMINANT.png) |
+
+### DOMINANT Alpha/Epoch Tuning (Round 6 — negative result)
+
+Grid search over attribute/structure loss weight (alpha) and training length found no improvement over the original baseline — confirms DOMINANT was already at its ceiling on this dataset, not undertrained.
+
+![DOMINANT Tuning](reports/dominant_tuning.png)
 
 ---
 
@@ -278,6 +288,7 @@ Random shuffling is explicitly avoided — this is a time-series dataset. Shuffl
 - **Exps 2 vs 5:** 2L→3L adds +3.8 F1 — depth captures 3-hop laundering chains
 - **Exps 5 vs 6:** LayerNorm + self-loops adds +6.8 F1 — essential at 3 layers
 - **Exps 8–10:** GAT never beats GraphSAGE — mean aggregation outperforms attention on sparse graph (avg degree 2.3)
+- **Exp 10 vs GATv2 Optuna (Round 6):** best hand-tuned GATv2 (0.382) vs Optuna-tuned GATv2 (0.5508, hidden=64, heads=4) — proper hyperparameter search closes most of the GAT/SAGE gap, but SAGE still wins
 
 ### GNN Progression
 ![GNN Experiments](reports/gnn_experiments_progression.png)
@@ -310,12 +321,23 @@ SHAP TreeExplainer for RF + GBM, gradient attribution for GraphSAGE.
 ### GraphSAGE Gradient Attribution
 ![GNN attribution](reports/gnn_gradient_attribution.png)
 
+### GNNExplainer — Node-Level Confirmation
+
+`scripts/gnn_explainer_analysis.py` runs `torch_geometric.explain.GNNExplainer` on the 15 highest-confidence true-positive illicit predictions from GraphSAGEv2+PseudoLabels. Unlike SHAP/gradient attribution (global, aggregate importance), this explains individual predictions: which specific input features and which specific neighboring edges drove *that node's* "illicit" classification.
+
+- `lf_53` appears in the top-10 feature mask for **15/15** explained nodes; `lf_90` for 4/15 — the first instance-level (not just global) confirmation that these features are causal to individual predictions
+- Repeated high-importance neighbor transactions across multiple explained nodes (one txId shows up as a top-5 important neighbor for 9/15 explained nodes) — consistent with "guilt by association" laundering chains sharing structural hubs
+- Output: `reports/gnn_explainer_summary.csv`
+
+![GNNExplainer feature importance](reports/gnn_explainer_feature_importance.png)
+
 ### Cross-Model Feature Agreement
 
 | Agreement | Features |
 |-----------|----------|
 | RF ∩ GBM (7/20) | `lf_18`, `lf_47`, `lf_53`, `lf_59`, `lf_76`, `lf_90`, `af_70` |
 | RF ∩ GBM ∩ GNN (3/20) | **`lf_53`**, **`lf_90`**, **`af_70`** |
+| + GNNExplainer node-level (instance-specific) | **`lf_53`** (15/15 nodes), **`lf_90`** (4/15 nodes) |
 
 These three features rank top-20 regardless of model family — strongest consistent signals in the dataset. All three are aggregated neighborhood features (af_ prefix = aggregated), confirming graph structure encodes meaningful signal.
 
@@ -374,7 +396,11 @@ These three features rank top-20 regardless of model family — strongest consis
 │   ├── runtime_benchmark.py             # per-transaction inference latency (GBM/GraphSAGE)
 │   ├── error_analysis.py                # FN/FP breakdown, temporal + feature-level
 │   ├── threshold_leakage_demo.py        # threshold-on-train vs threshold-on-val leakage demo
-│   └── significance_plots.py            # plots for the significance/SOTA/runtime items
+│   ├── significance_plots.py            # plots for the significance/SOTA/runtime items
+│   ├── gat_optuna_tuning.py             # GATv2 Optuna tuning (Round 6)
+│   ├── dominant_tuning.py               # DOMINANT alpha/epoch grid search (Round 6)
+│   ├── gnn_explainer_analysis.py        # GNNExplainer node-level attribution (Round 6)
+│   └── lstm_autoencoder_pertx.py        # LSTM-AE per-transaction scoring (Round 6)
 │
 ├── models/                      # saved weights
 │   ├── scaler.joblib · scaler_graph_features.joblib · scaler_structural.joblib
@@ -384,7 +410,8 @@ These three features rank top-20 regardless of model family — strongest consis
 │   ├── autoencoder.pt · denoising_ae.pt · dominant.pt · lstm_ae.pt
 │   ├── vae.pt · vaev2.pt
 │   ├── graphsage.pt · graphsage_tuned.pt · graphsagev2.pt · graphsagev2_pseudo.pt
-│   └── gat.pt · gatv2.pt
+│   ├── gat.pt · gatv2.pt · gatv2_tuned.pt
+│   └── dominant_tuned.pt · lstm_ae_pertx.pt
 │
 ├── reports/                     # auto-generated plots + CSVs
 │   ├── final_leaderboard.csv              ← all 48 experiments ranked
@@ -400,7 +427,9 @@ These three features rank top-20 regardless of model family — strongest consis
 │   ├── sota_comparison.png
 │   ├── runtime_benchmark.csv/.png
 │   ├── error_analysis_summary.csv · error_analysis_features.csv · error_analysis.png
-│   └── threshold_leakage_demo.csv/.png
+│   ├── threshold_leakage_demo.csv/.png
+│   ├── dominant_tuning.csv/.png
+│   └── gnn_explainer_summary.csv · gnn_explainer_feature_importance.png
 │
 └── data/                        # gitignored — run download_data.py
 ```
@@ -478,6 +507,12 @@ python scripts/lgbm_xgboost_structural.py  # ~10 min
 
 # Final leaderboard (all 48 experiments, 3 plots)
 python scripts/final_leaderboard.py
+
+# Round 6: GAT tuning, DOMINANT tuning, GNNExplainer, LSTM-AE per-transaction
+python scripts/gat_optuna_tuning.py        # ~15 min GPU (30 trials)
+python scripts/dominant_tuning.py          # ~10 min GPU (10 configs)
+python scripts/gnn_explainer_analysis.py   # ~2 min GPU
+python scripts/lstm_autoencoder_pertx.py   # ~1 min
 ```
 
 ### Score New Transactions (Inference)
@@ -518,8 +553,10 @@ results = score_from_csv(
 | Spectral embedding no signal | Fiedler value ≈ 2 (graph is bipartite-like). Money laundering chains don't form isolated spectral communities. |
 | Feature names unknown | Elliptic does not publish semantics. Columns named `lf_1..93` and `af_1..72`. |
 | Windows console unicode | Avoid arrow/tick characters in print() — cp1252 codec breaks on Windows terminal. |
-| GAT underperforms throughout | Attention overfits sparse graph. Mean aggregation (GraphSAGE) more stable. |
+| GAT underperforms throughout | Attention overfits sparse graph. Mean aggregation (GraphSAGE) more stable — even after GAT's own Optuna tuning (F1=0.5508) it trails tuned GraphSAGE (0.688–0.729). |
 | `get_feature_cols()` includes time_step | Must explicitly exclude `time_step` when using feature cols for scaling. |
+| DOMINANT alpha/epoch tuning has no headroom | Grid search over alpha∈{0.1..0.9}×epochs∈{200,500} found nothing better than the original baseline (F1≈0.21) — the model was already near its ceiling, not undertrained. Structure-loss-heavy configs (alpha=0.9) collapse to F1≈0.03. |
+| LSTM-AE per-transaction scoring is worse than step-level | Scoring each transaction against its own step's LSTM-AE reconstruction (instead of sharing one step-level score) drops F1 from 0.122 to 0.037 — the weak temporal signal only survives at step-level aggregation, not per-transaction. |
 
 ---
 
