@@ -1,0 +1,29 @@
+Device: cuda
+Loading data...
+Graph: 203,769 nodes  468,710 edges  train_labeled=29,894  test_labeled=16,670
+Loading GraphSAGEv2 + PseudoLabels (models/graphsagev2_pseudo.pt)...
+True-positive illicit test nodes available: 761
+Explaining top-15 highest-confidence true positives...
+  node 172476 (txId=71990611)  p=1.000  robust_hit=['lf_53']
+  node 141677 (txId=68945302)  p=1.000  robust_hit=['lf_53']
+  node 138348 (txId=68986317)  p=1.000  robust_hit=['lf_53']
+  node 138667 (txId=68943318)  p=1.000  robust_hit=['lf_53']
+  node 139737 (txId=68976860)  p=1.000  robust_hit=['lf_53', 'lf_90']
+  node 137831 (txId=68990207)  p=1.000  robust_hit=['lf_53', 'lf_90']
+  node 139500 (txId=68988797)  p=1.000  robust_hit=['lf_53']
+  node 139724 (txId=68980512)  p=1.000  robust_hit=['lf_53']
+  node 141559 (txId=68980397)  p=1.000  robust_hit=['lf_53']
+  node 140735 (txId=68957072)  p=1.000  robust_hit=['lf_53']
+  node 136454 (txId=68986786)  p=1.000  robust_hit=['lf_53']
+  node 169671 (txId=71988781)  p=1.000  robust_hit=['lf_53']
+  node 140121 (txId=68988443)  p=1.000  robust_hit=['lf_53', 'lf_90']
+  node 136917 (txId=68952830)  p=1.000  robust_hit=['lf_53']
+  node 138921 (txId=68980597)  p=1.000  robust_hit=['lf_53', 'lf_90']
+
+Saved: reports/gnn_explainer_summary.csv
+Saved: reports/gnn_explainer_feature_importance.png
+
+=== GNNExplainer Summary ===
+Explained 15 true-positive illicit nodes.
+Robust features (lf_53/lf_90/af_70) appeared in top-10 for 15/15 explained nodes.
+Overall top-5 by avg importance: ['lf_52', 'af_63', 'lf_53', 'af_57', 'lf_91']
